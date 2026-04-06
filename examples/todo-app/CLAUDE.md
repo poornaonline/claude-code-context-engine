@@ -58,11 +58,11 @@ npm test             # Vitest
 
 ## The 8 Laws
 
-1. **Read CLAUDE.md first** — every session, no exceptions.
-2. **Load only what you need** — follow progressive disclosure.
-3. **Specs are source of truth** — code matches specs, not the other way around.
-4. **Update framework before coding** — spec changes precede implementation.
-5. **One task at a time** — finish or park before starting another.
-6. **Verify via tests** — every change must have test coverage.
-7. **Handoff cleanly** — update session-handoff.md at session end.
-8. **Never hallucinate paths** — if you haven't read a file, don't reference it.
+1. Read BOOTSTRAP.md before any work.
+2. Every code change updates the relevant spec.
+3. Fresh context -> run Tier 1 crash check (session-handoff.md).
+4. Before code: check in-progress, completed, patterns. If task depends on unresolved spike — STOP.
+5. Commit after each testable unit.
+6. Unplanned work -> discuss first (new-feature-template.md).
+7. Unclear -> ASK. Bad idea -> PUSH BACK.
+8. Verify before trust — run freshness check on specs before implementing.

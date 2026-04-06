@@ -115,6 +115,7 @@ Ask:
 1. "List the features for the FIRST version (MVP). What's the minimum that makes this useful?"
 2. "For each feature, describe: what the user does, what happens, what they see."
 3. "Are there features you want EVENTUALLY but NOT in the MVP? (List them so we can plan the architecture to accommodate them without building them now)"
+4. "For each feature, how confident are you in the technical approach? Specifically: is there anything that depends on undocumented APIs, OS-level access, hardware behavior, or a technique you haven't validated? Those are the features we'll want to prove out first."
 
 If the user lists too many MVP features, push back: "That's [X] features for an MVP. Typically an MVP has 3-5 core features. Can we trim this to the absolute essentials?" If features are vague, ask for specifics: "You said 'user management' — does that mean: registration, login, profiles, roles/permissions, team management? Which of these are MVP?"
 
@@ -245,6 +246,7 @@ List every module/service/major component. Adapt the fields to your project type
   - Script: Input sources, output format, configuration options
 - **Third-party integrations** (if applicable): Which external services this module uses
 - **Platform-specific notes** (if applicable): iOS/Android differences, OS-specific behavior, browser compatibility
+- **Technical certainty:** Proven / Explored / Uncharted — is the implementation approach for this module well-understood? If Uncharted, note what needs validation (e.g., "macOS CGEvent API for mouse button interception — unclear if user-space access is sufficient without a kernel extension").
 - **Quick Answer questions:** 5 questions agents will most commonly ask about this module. Write them as direct questions an agent would ask while implementing (e.g., "How does the auth module validate JWT tokens?", "What event format does the queue module expect?"). These get extracted into the spec's Quick Answers section for fast lookup.
 - **Keywords:** Concepts, terms, and technologies associated with this module (e.g., "JWT, refresh token, OAuth2, session, middleware"). Used to build the keyword index in specs/INDEX.md for cross-cutting searches.
 
@@ -275,6 +277,7 @@ Ordered list of features for the first version. For each:
 - **Context-dependencies:** Which module specs and docs an agent needs loaded to implement this feature (e.g., "specs/auth.md, specs/database.md, conventions.md"). Maps directly to the `load:` field in task cards so agents load exactly the right context.
 - **Acceptance criteria:** How to know it's done (testable conditions)
 - **Complexity:** S / M / L
+- **Certainty:** Proven / Explored / Uncharted — how confident are we that the technical approach will work? **Proven** = standard patterns, well-documented APIs (CRUD, JWT auth, database queries). **Explored** = conceptually understood but not validated in this specific context (third-party API with docs but untested). **Uncharted** = core feasibility is unknown (OS internals, undocumented APIs, hardware behavior, novel algorithms). If Uncharted, note what specifically is uncertain and what a proof-of-concept would need to demonstrate.
 - **Dependencies:** Which other features must be built first (by F-ID)
 
 For existing projects: mark features as "Implemented", "Partially implemented", or "Planned."
@@ -334,6 +337,7 @@ For each external service:
 
 - **Be specific, not vague.** "User authentication" is vague. "Email/password registration with email verification, login with JWT access tokens (15min expiry) and refresh tokens (7 day expiry), password reset via email" is specific enough for an AI agent to implement.
 - **Every feature needs acceptance criteria.** If you can't write testable acceptance criteria, the feature isn't defined well enough.
+- **Rate certainty honestly.** If you don't know whether the core technical approach will work, that's "Uncharted" — not "Explored." The distinction matters: Uncharted features generate research spikes that run BEFORE any dependent work begins. Marking something Proven when it isn't wastes the agent's time building on an unvalidated foundation.
 - **Version numbers are mandatory.** For every technology, include the explicit version. Use web_search — never guess from training data.
 - **For existing projects:** The PRD describes REALITY plus PLANS. Don't pretend things that aren't built yet are already done. Don't omit things that are built but not in the original vision.
 - **Mark unknowns as "TBD — needs decision" rather than guessing.** The AI framework handles TBDs correctly by flagging them.
@@ -391,6 +395,9 @@ Also check:
 - Does every module have a domain group assigned?
 - Does every module have capabilities (provides/consumes) listed?
 - Are capabilities consistent — if module A consumes X, does some module provide X?
+- Does every feature have a Certainty rating (Proven/Explored/Uncharted)?
+- Does every Uncharted feature describe what specifically needs validation?
+- If a Proven feature depends on an Uncharted module, is the feature's Certainty correctly elevated?
 
 Report all findings."
 

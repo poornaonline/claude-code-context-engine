@@ -107,6 +107,8 @@ CR-8: PUSH BACK on bad ideas. Explain why. Suggest alternatives.
 CR-9: SUBAGENTS FOR RETRIEVAL. Main agent writes code. Subagents read docs, run tests, update files.
 CR-10: DISCUSS BEFORE BUILDING. New features/changes -> new-feature-template.md -> discuss -> plan -> approve -> implement.
 CR-11: VERIFY BEFORE TRUST. Run freshness check on specs before implementing. Stale spec = wrong code.
+CR-12: PROVE BEFORE BUILD. Uncharted work gets a time-boxed spike task before any dependent implementation begins. The spike produces a verdict (FEASIBLE / FEASIBLE-WITH-CONSTRAINTS / NOT-FEASIBLE), not production code. Dependent tasks remain blocked until the spike resolves. This prevents building on assumptions that may be false.
+CR-13: CORE BEFORE CHROME. Order implementation by layer: infrastructure/data → core logic → integration → UI/presentation. Even when all features are Proven, build the foundation before the interface.
 
 ## Priority Hierarchy (when sources conflict)
 1. Direct user instruction (always wins)
@@ -154,7 +156,7 @@ STEP 6: ACT
 
 | User Intent | Action |
 |---|---|
-| "Implement next task" | backlog.md -> pick top task -> read its `load:` field |
+| "Implement next task" | backlog.md -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
 | "Fix a bug" | specs/INDEX.md -> find module -> load spec |
 | "Fix a multi-module bug" | Spawn Bug Tracer -> read primary spec -> Spec Readers for secondaries |
 | "Add a feature" | new-feature-template.md -> discuss before building |
@@ -163,6 +165,7 @@ STEP 6: ACT
 | "Understand system flow" | Spawn Cross-Module Scout -> returns interaction chain + reading order |
 | "Continue previous" | in-progress.md -> read session notes -> resume |
 | "Project status" | backlog + in-progress + completed summary |
+| "Spike completed" | in-progress.md -> read spike verdict -> if FEASIBLE: unblock dependent tasks in backlog. If NOT-FEASIBLE: flag to user, discuss alternatives, potentially remove dependent tasks |
 | "Resync framework" | session-handoff.md resync protocol |
 
 **Context Loading Strategy:**
@@ -190,12 +193,25 @@ Budget: framework files consume <=12k tokens of ~150-200k context (under 11k tok
 **Research Brief Format (Context Scout output):**
 ```
 GOAL: [one sentence]
+CERTAINTY: [Proven/Explored/Uncharted — from PRD feature/module rating]
 CREATE: [new files]
 MODIFY: [existing files]
 REUSE: [patterns from patterns.md — file paths verified]
 INTERFACES: [APIs/types to conform to]
 EDGE CASES: [gotchas from spec known-issues]
+SPIKE-VERDICT: [if task depends on a completed spike, include verdict + constraints. If spike PENDING: "BLOCKED — spike TASK-NNN not yet resolved." Omit if no spike dependency.]
 ```
+
+**Spike Protocol (CR-12) — when top backlog task is type=spike:**
+1. Read the spike task's acceptance criteria — what question must be answered?
+2. Use web_search to find latest docs/APIs relevant to the spike (e.g., OS frameworks, hardware APIs, third-party SDKs).
+3. Create a minimal proof-of-concept in `spikes/{feature-name}/` (NOT in `src/`).
+4. The POC should be the smallest possible code that answers the feasibility question.
+5. Record verdict in the spike task card: `verdict: FEASIBLE | FEASIBLE-WITH-CONSTRAINTS | NOT-FEASIBLE`
+6. **FEASIBLE:** Move spike to completed. Unblock dependent tasks. Note any discoveries that affect implementation approach.
+7. **FEASIBLE-WITH-CONSTRAINTS:** Document constraints. Present to user. Update dependent task acceptance criteria to account for constraints.
+8. **NOT-FEASIBLE:** STOP. Present findings to user. Discuss alternative approaches. Do NOT proceed with dependent tasks.
+9. Commit spike: `chore(spike): validate [description] — [VERDICT] [TASK-ID]`
 
 ### 2. specs/INDEX.md — Hierarchical Domain Routing
 
@@ -275,7 +291,7 @@ last-updated: YYYY-MM-DD
 
 **Next Up** — top task as a full card (~100 tokens):
 ```
-TASK-042 | M | Add password reset flow
+TASK-042 | M | impl | Add password reset flow
   deps: none (all met)
   load: [specs/auth.md, specs/email.md]
   load-chain: [specs/auth.md -> specs/database.md]
@@ -283,12 +299,24 @@ TASK-042 | M | Add password reset flow
   patterns: [email-sender, token-signer]
 ```
 
+Spike task example:
+```
+TASK-007 | S | spike | Validate macOS CGEvent mouse button interception
+  deps: none
+  load: [specs/input-capture.md]
+  touch: [spikes/mouse-intercept-poc.swift]
+  patterns: []
+  verdict: PENDING
+```
+
+Type is `impl` (implementation) or `spike` (research/validation). Spike tasks include a `verdict:` field (PENDING / FEASIBLE / FEASIBLE-WITH-CONSTRAINTS / NOT-FEASIBLE).
+
 **Queue** — remaining tasks as compact table:
 ```
-| ID | Size | Title | Deps Met? |
-|----|------|-------|-----------|
-| TASK-043 | S | Rate limit login | yes |
-| TASK-044 | L | OAuth Google | NO (TASK-042) |
+| ID | Size | Type | Title | Deps Met? |
+|----|------|------|-------|-----------|
+| TASK-043 | S | impl | Rate limit login | yes |
+| TASK-044 | L | impl | OAuth Google | NO (TASK-042) |
 ```
 
 Every task card carries its own context-loader: `load:` lists exact specs, `load-chain:` is the transitive closure of cross-links from `load:` specs (pre-computed at task creation by Dependency Resolver subagent), `touch:` lists files to modify, `patterns:` lists patterns to reuse. The agent never guesses what context to load.
@@ -394,16 +422,17 @@ All clean -> proceed. Any dirty -> spawn State Checker subagent for Tier 2.
 4. **Validate** — check cross-references.
 5. **Commit** — `docs(framework): resync`
 
-### 11. new-feature-template.md — 4-Phase Workflow
+### 11. new-feature-template.md — Phased Workflow
 
 | Phase | Name | Key Actions |
 |-------|------|-------------|
-| 1 | Understand & Discuss | Restate requirement, research via Context Scout, clarify, push back |
-| 2 | Plan & Present | Break into tasks, show impact, get user approval |
+| 1 | Understand & Assess | Restate requirement, research via Context Scout, assess certainty (Proven/Explored/Uncharted), clarify, push back |
+| 1.5 | Spike (if Uncharted) | Create time-boxed spike task. Build minimal POC in `spikes/`. Produce verdict (CR-12). **Skip if Proven/Explored.** |
+| 2 | Plan & Present | Break into tasks (ordered by CR-13: infra → core → integration → UI), incorporate spike verdict and constraints, get user approval |
 | 3 | Update Framework | Add tasks to backlog, update specs as "planned", log changelog |
 | 4 | Implement | Incremental commits, update specs as behavior changes |
 
-Never skip Phase 1. Never start Phase 4 without approval from Phase 2.
+Never skip Phase 1. If Phase 1 identifies Uncharted certainty, Phase 1.5 is mandatory — do not plan implementation until the spike produces a verdict (CR-12). Never start Phase 4 without approval from Phase 2.
 
 ### 12. .context/manifest.md (~200 tokens) — Context Budget Table
 
@@ -471,7 +500,7 @@ All return findings, write nothing until user approves.
 1. Read BOOTSTRAP.md before any work.
 2. Every code change updates the relevant spec.
 3. Fresh context -> run Tier 1 crash check (session-handoff.md).
-4. Before code: check in-progress, completed, patterns.
+4. Before code: check in-progress, completed, patterns. If task depends on unresolved spike — STOP.
 5. Commit after each testable unit.
 6. Unplanned work -> discuss first (new-feature-template.md).
 7. Unclear -> ASK. Bad idea -> PUSH BACK.
@@ -495,7 +524,7 @@ You (orchestrator) must manage your own context. Act as a coordinator: read this
 ### Phase 1: Analysis (2 parallel subagents)
 
 **Subagent 1A: PRD Analysis**
-"Read docs/prd.md. Extract: features list, tech stack (all layers with versions), architecture type, data models, API surface, modules/services, non-functional requirements, database systems, third-party integrations, deployment targets. Also extract: module domain groupings (cluster related modules into 5-10 domains like auth, data, ui, integrations, infra). For each module, extract capabilities: what it PROVIDES and what it CONSUMES. Use web_search to verify latest LTS/stable version of EVERY dependency. Flag anything contradictory or impractical. Output a structured summary."
+"Read docs/prd.md. Extract: features list, tech stack (all layers with versions), architecture type, data models, API surface, modules/services, non-functional requirements, database systems, third-party integrations, deployment targets. Also extract: module domain groupings (cluster related modules into 5-10 domains like auth, data, ui, integrations, infra). For each module, extract capabilities: what it PROVIDES and what it CONSUMES. Extract certainty ratings per feature and module (Proven/Explored/Uncharted) — flag any Uncharted items as requiring spike tasks (CR-12). Use web_search to verify latest LTS/stable version of EVERY dependency. Flag anything contradictory or impractical. Output a structured summary."
 
 **Subagent 1B: Project State Detection**
 "Determine if this is an existing or new project. If existing: scan codebase, map directories to purpose, list source files grouped by module, detect conventions (linting, naming, commit style), detect package managers and test setups, identify what's built vs missing. If new: report empty. Output structured summary."
@@ -514,11 +543,11 @@ Pass each subagent: PRD analysis summary + project state summary + shared contra
 
 ```
 ## Shared Contract
-| Domain | Module ID | Name | Spec Path | Provides | Consumes |
-|--------|-----------|------|-----------|----------|----------|
-| auth | MOD-01 | auth-core | specs/auth/auth-core.md | user-identity | database |
+| Domain | Module ID | Name | Spec Path | Provides | Consumes | Certainty |
+|--------|-----------|------|-----------|----------|----------|-----------|
+| auth | MOD-01 | auth-core | specs/auth/auth-core.md | user-identity | database | Proven |
 
-Task ID Registry: TASK-001 through TASK-NNN
+Task ID Registry: TASK-001 through TASK-NNN (Type: impl or spike)
 Domain grouping: [auth, data, ui, integrations, infra, ...]
 For <=15 modules: skip domains, use flat specs/INDEX.md
 File naming: kebab-case for docs, match project convention for code
@@ -531,13 +560,23 @@ File naming: kebab-case for docs, match project convention for code
 "If >15 modules: create specs/INDEX.md as DOMAIN lookup table (domain | count | purpose + KEYWORD_HINTS). Create specs/[domain]/INDEX.md for each domain (module | keywords | provides | consumes + cross-domain dependencies). Create one spec per module using progressive disclosure with capability annotations (provides/consumes in front-matter). For <=15 modules: flat INDEX.md with capabilities. For existing projects: scan actual code."
 
 **Subagent 3C: All task files**
-"Create tasks/backlog.md with: YAML front-matter (next-task, total), Next Up section with context-loader (load/touch/patterns), Queue table. Create tasks with load-chain: field on each task card (transitive closure of cross-links). Spawn a subagent per task to walk cross-links and compute the chain. Create dependency snapshots in detail files for complex tasks. Create tasks/in-progress.md (empty). Create tasks/completed.md (populated for existing projects). Break large features into sub-tasks. Use shared contract."
+"Create tasks/backlog.md with: YAML front-matter (next-task, total), Next Up section with context-loader (load/touch/patterns), Queue table with Type column. Create tasks with load-chain: field on each task card (transitive closure of cross-links). Spawn a subagent per task to walk cross-links and compute the chain. Create dependency snapshots in detail files for complex tasks. Create tasks/in-progress.md (empty). Create tasks/completed.md (populated for existing projects). Break large features into sub-tasks. Use shared contract.
+
+SPIKE TASKS (CR-12): For every feature or module marked Certainty: Uncharted in the PRD, create a spike task BEFORE any implementation tasks for that feature. Spike tasks: title format 'Spike: Validate [what needs proving]', type=spike, Size=S (spikes prove a concept, not build a feature). Acceptance criteria: a working minimal POC that demonstrates the core technical question is answered, producing a VERDICT (FEASIBLE / FEASIBLE-WITH-CONSTRAINTS / NOT-FEASIBLE). Touch files go in spikes/ directory, NOT in production src/. All implementation tasks for that feature list the spike task ID as a dependency. For Certainty: Explored features, do NOT create a spike but add a note in the task detail: 'Certainty: Explored — if implementation reveals unexpected blockers, pause and create a spike before continuing.'
+
+TASK ORDERING (CR-13): Order tasks in the backlog by:
+1. Dependency resolution (blocked tasks sort after their blockers)
+2. Certainty class (Uncharted spikes first, then Explored, then Proven)
+3. Implementation layer (infra/data → core logic → integration → UI/presentation)
+4. Priority (P0 before P1)
+5. Task ID (stable tiebreaker)
+This means the top of the backlog will always be: unblocked spike tasks for Uncharted work, then core infrastructure, then feature implementation, then UI/polish. An agent working top-to-bottom will naturally validate the riskiest assumptions before building on them."
 
 **Subagent 3D: conventions.md + patterns.md**
 "Create conventions.md from PRD + detected conventions. Create patterns.md organized by PROBLEM SOLVED: index table + detail sections with trigger/location/usage per pattern. For existing projects: scan code for utilities and register them. Create .maintenance-log.md (empty, append-only). NO cross-reference-graph.md (cross-refs now live in domain INDEX files). Use shared contract."
 
 **Subagent 3E: new-feature-template.md**
-"Create new-feature-template.md with 4-phase workflow: Understand & Discuss -> Plan & Present -> Update Framework -> Implement. Include modification and removal handling. Reference core rules by CR-N."
+"Create new-feature-template.md with phased workflow: Phase 1 (Understand & Assess — includes certainty assessment), Phase 1.5 (Spike — conditional, only if Uncharted per CR-12), Phase 2 (Plan & Present — ordered by CR-13: infra → core → integration → UI), Phase 3 (Update Framework), Phase 4 (Implement). Include modification and removal handling. Reference core rules by CR-N."
 
 **Orchestrator post-Phase 3:** Wait for 3A-3E. Then create CLAUDE.md yourself — it synthesizes everything, must stay <=2,500 tokens. If existing CLAUDE.md: read it, check for conflicts, present to user, merge after approval.
 
@@ -559,6 +598,9 @@ File naming: kebab-case for docs, match project convention for code
 12. All domain INDEX cross-domain dependencies reference real domain/module pairs
 13. Auto-maintenance files exist (.maintenance-log.md)
 14. .context/manifest.md lists all framework files
+15. Every PRD feature with Certainty: Uncharted has at least one spike task in the backlog
+16. Every spike task has dependent implementation tasks that list the spike as a blocker
+17. No implementation task for an Uncharted feature appears before its spike in the backlog ordering
 Report all gaps. Check real structural properties only — no simulations."
 
 ### Phase 5: Fixes (1 subagent)
@@ -587,7 +629,7 @@ project-root/
   docs/ai-framework/
     BOOTSTRAP.md                         # wakeup ritual + decision tree + 10 subagent workers
     session-handoff.md                   # crash recovery + resync + auto-maintenance triggers
-    new-feature-template.md              # 4-phase discuss->plan->update->implement
+    new-feature-template.md              # phased workflow: understand->spike(if uncharted)->plan->update->implement
     conventions.md                       # coding standards
     patterns.md                          # reusable patterns indexed by problem
     .maintenance-log.md                  # append-only maintenance audit trail
@@ -605,4 +647,5 @@ project-root/
       completed.md                       # done pile
       detail/
         [TASK-NNN].md ...                # task breakdowns + dependency snapshots
+  spikes/                                  # spike POC code (not in src/), created by CR-12
 ```

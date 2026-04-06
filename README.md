@@ -46,7 +46,7 @@ With this framework:
 - The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (under 11k tokens)
 - Architecture, conventions, and patterns are documented and always up to date
 - Crash recovery detects interrupted work and picks up where it left off — with a write-ahead log that survives crashes
-- New features go through a structured discuss → plan → approve → implement flow
+- New features go through a structured discuss → plan → approve → implement flow, with certainty ratings (Proven/Explored/Uncharted) that trigger spike tasks for unproven concepts before implementation begins
 - Context retrieval is optimized: agents never load full specs unless a task card points them there
 - The framework evolves with the codebase — it's never a stale snapshot
 
@@ -63,7 +63,7 @@ Always loaded. Never more than 2,500 tokens. Contains **navigation pointers only
 Quick-scan cards, ~50-100 tokens each. The agent flips through these to find what it needs without loading full documents.
 
 - **`specs/INDEX.md`** — Domain routing table. For projects with 16+ modules, groups modules into domains (auth, data, ui, etc.). Each domain has its own `specs/[domain]/INDEX.md` with module cards including capability annotations (what each module provides and consumes). For smaller projects, a flat lookup table.
-- **`tasks/backlog.md`** — Task cards with **context-loaders**: `load:` (exact specs to read), `touch:` (files to modify), `patterns:` (patterns to reuse). The agent knows what to load before it loads anything.
+- **`tasks/backlog.md`** — Task cards with **context-loaders**: `load:` (exact specs to read), `touch:` (files to modify), `patterns:` (patterns to reuse). Each task has a `type` field (`impl` for implementation, `spike` for research/validation). Spike tasks include a `verdict:` field tracking feasibility. The agent knows what to load before it loads anything.
 - **`tasks/in-progress.md`** — Status cards for session handoff. What was being done, where it stopped, what's next.
 
 ### Layer 3: The Wall (Full specs, task details, patterns)
@@ -137,7 +137,8 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
   │
   └─→ docs/ai-framework/
        ├── BOOTSTRAP.md ──────── Wakeup ritual, decision tree,
-       │                         subagent retrieval workers, context strategy
+       │                         subagent retrieval workers, spike protocol,
+       │                         context strategy
        ├── specs/
        │   ├── INDEX.md ──────── Domain routing table
        │   ├── [domain]/
@@ -156,6 +157,7 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
        ├── .maintenance-log.md ─ Auto-maintenance run history
        └── .context/
             └── manifest.md ──── Token budget per file
+  spikes/ ────────────────────── Spike POC code (not in src/)
   .ai-session-log ────────────── Write-ahead log (append-only)
   .ai-agent.lock ─────────────── Concurrent agent prevention
   .git/hooks/pre-commit ──────── Advisory doc-update reminder
@@ -166,7 +168,7 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
 | File / Directory | Purpose |
 |------|---------|
 | `prd-generator-prompt.md` | **Run first.** Generates a Product Requirements Document through discussion with you. Scans existing codebases or asks questions for new projects. |
-| `ai-framework-bootstrap-prompt.md` | **Run second.** Reads the PRD and builds the complete framework. Handles new and existing projects. Runs 14 structural validation checks. |
+| `ai-framework-bootstrap-prompt.md` | **Run second.** Reads the PRD and builds the complete framework. Handles new and existing projects. Runs 17 structural validation checks. |
 | `examples/todo-app/` | Complete reference output — a Todo API project showing every file the framework generates. Use this to understand what "good" looks like before running the prompts. |
 | `design/` | Internal architecture proposals (8 design docs). Not required to use the framework — kept as reference for contributors and anyone curious about the design decisions. |
 
@@ -223,12 +225,13 @@ Once set up, you interact naturally. The framework handles the rest:
 
 | You say | What happens |
 |---------|-------------|
-| *"Implement the next task"* | Finds highest-priority task with met dependencies, implements it |
-| *"Implement TASK-007"* | Finds that task, checks dependencies, reads relevant specs, builds it |
+| *"Implement the next task"* | Picks the top task from backlog (ordered by: deps → certainty class → implementation layer → priority → task ID). If it's a spike: runs Spike Protocol (POC in `spikes/`, produces verdict). If it's an impl task: reads specs, builds it |
+| *"Implement TASK-007"* | Finds that task, checks dependencies (including spike verdicts), reads relevant specs, builds it |
 | *"Add a webhook notification system"* | Discusses scope → asks clarifying questions → presents plan → waits for approval → implements |
 | *"Change auth from JWT to sessions"* | Shows change impact across all modules → pushes back if it breaks things → implements after approval |
 | *"Fix: users can log in with expired tokens"* | Finds auth spec → fixes bug → updates known issues so future agents know |
 | *"Remove the legacy CSV export"* | Shows what depends on it → gets confirmation → removes code + cleans up all docs |
+| *"Spike completed"* | Reads spike verdict. If FEASIBLE: unblocks dependent tasks. If NOT-FEASIBLE: flags to user, discusses alternatives |
 | *"What's the project status?"* | Summarizes: done, in progress, remaining |
 | *"Another dev pushed changes, resync"* | Scans codebase → compares against specs → presents drift report → updates after approval |
 | *"Refactor the payment module"* | Discusses scope → shows impact → implements incrementally after approval |
@@ -280,6 +283,7 @@ The main agent writes code. Everything else is delegated.
 | **Docs drift from code** | Pre-commit hook warns. If violated, resync fixes it. |
 | **Two agents start simultaneously** | Lock file prevents concurrent corruption. Second agent warns and waits. |
 | **Project grows to 50+ modules** | Auto-splitting: specs into sub-directories, backlog into phase files, completed into monthly archives, patterns by layer. |
+| **Feature uses unproven tech** | Certainty rated Uncharted. A spike task validates feasibility with a minimal POC before any implementation begins. |
 | **PRD has something impractical** | Agent pushes back, explains why, suggests alternatives. Won't silently build the wrong thing. |
 | **Something is ambiguous** | Agent asks. Never assumes. Marks unresolved items as "NEEDS CLARIFICATION." |
 
@@ -293,6 +297,8 @@ The main agent writes code. Everything else is delegated.
 - **Small increments.** One endpoint, one component, one function per commit. Each commit includes doc updates. This is what makes crash recovery work.
 - **Ask, don't assume.** Ambiguity gets flagged, not guessed at. Bad ideas get pushed back on, not silently built.
 - **Subagents for everything except coding.** Reading specs, running tests, updating docs, checking for patterns — all delegated. Main agent context stays clean.
+- **Prove before build (CR-12).** Uncharted features get a time-boxed spike task that produces a feasibility verdict before any dependent implementation begins. This prevents building on assumptions that may be false.
+- **Core before chrome (CR-13).** Tasks are ordered by implementation layer: infrastructure/data → core logic → integration → UI/presentation. Build the foundation before the interface.
 - **Framework evolves with code.** Every implementation updates the framework. It's never a stale snapshot.
 
 ## Architecture Decisions
@@ -313,7 +319,7 @@ The main agent writes code. Everything else is delegated.
 
 **Why subagents?** Claude Code's Task tool spawns child agents with their own context. This means the main agent can delegate spec-reading, test-running, and doc-updating to subagents without bloating its own context. The main agent stays focused on writing code.
 
-**Why the 4-phase feature template (discuss → plan → approve → implement)?** Without it, agents jump straight to code from vague descriptions. The template forces clarification, impact analysis, and user approval before any code is written. It also ensures the framework docs are updated before implementation, not after.
+**Why the phased feature workflow (understand → spike → plan → update → implement)?** Without it, agents jump straight to code from vague descriptions. The template forces clarification, impact analysis, and user approval before any code is written. For Uncharted features (those with no team experience), a mandatory spike phase (Phase 1.5) validates feasibility before planning begins. It also ensures the framework docs are updated before implementation, not after.
 
 **Why crash recovery on every session start?** Because every session termination is ambiguous. Clean exit, crash, Ctrl+C, terminal close — they all look the same to a fresh agent. Always checking is cheaper than occasionally getting it wrong.
 

@@ -49,12 +49,12 @@ Monolith — single deployable Express server. No microservices.
 
 ## MVP Features
 
-| ID    | Feature            | Priority | Description                                      |
-|-------|--------------------|----------|--------------------------------------------------|
-| F-001 | CRUD Todos         | P0       | Create, read, update, delete todo items           |
-| F-002 | User Auth          | P0       | Register and login with JWT tokens                |
-| F-003 | Filtering          | P1       | Filter todos by completed status and due date     |
-| F-004 | Due Dates          | P1       | Set and query due dates, overdue detection        |
+| ID    | Feature            | Priority | Certainty | Description                                      |
+|-------|--------------------|----------|-----------|--------------------------------------------------|
+| F-001 | CRUD Todos         | P0       | Proven    | Create, read, update, delete todo items           |
+| F-002 | User Auth          | P0       | Proven    | Register and login with JWT tokens                |
+| F-003 | Filtering          | P1       | Proven    | Filter todos by completed status and due date     |
+| F-004 | Due Dates          | P1       | Proven    | Set and query due dates, overdue detection        |
 
 ## Non-Functional Requirements
 

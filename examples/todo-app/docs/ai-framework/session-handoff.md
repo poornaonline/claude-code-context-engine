@@ -2,13 +2,10 @@
 
 ## End-of-Session Checklist
 
-Before ending a session, complete these steps:
-
-- [ ] Move finished tasks from `in-progress.md` → `completed.md`
-- [ ] Update spec files if implementation changed the design
-- [ ] Add any new patterns to `patterns.md`
-- [ ] Fill in the Current State section below
-- [ ] Note any blockers or open questions
+1. Commit uncommitted work with task ID in message.
+2. Update `tasks/in-progress.md` session notes.
+3. Append END to `.ai-session-log`.
+4. Update spec if behavior changed.
 
 ## Current State
 
@@ -27,14 +24,32 @@ No previous sessions — this is a fresh project. Start with TASK-001.
 
 ---
 
-## Crash Recovery (Tier 1)
+## Crash Recovery — Tier 1 Inline Check (5 seconds)
 
-If a session starts with no context or unclear state:
+| Check | Clean | Dirty -> Tier 2 |
+|-------|-------|-----------------|
+| `git status --short` | empty | any output |
+| `tail -1 .ai-session-log` | END or absent | no END |
+| `tasks/in-progress.md` | empty or has notes | active + no notes |
+| `.ai-agent.lock` | absent | present (check PID) |
 
-| Symptom                        | Recovery action                              |
-|-------------------------------|----------------------------------------------|
-| Don't know what project this is | Read `CLAUDE.md`                            |
-| Don't know current task        | Read `tasks/in-progress.md`                  |
-| In-progress is empty           | Read `tasks/backlog.md`, pick highest priority |
-| Code doesn't match spec        | Spec is source of truth — update code         |
-| Unknown file or module         | Read `specs/INDEX.md`, keyword search          |
+All clean -> proceed. Any dirty -> spawn State Checker subagent for Tier 2.
+
+## Crash Recovery — Tier 2 Subagent Audit (30 seconds)
+
+| Finding | Action |
+|---------|--------|
+| Uncommitted + incomplete | Assess viability. If salvageable: commit as WIP. If broken: `git stash push -m "recovery-SESSION_ID"` (NEVER discard). Note in in-progress.md. |
+| Uncommitted + complete | Run tests, commit properly, update spec |
+| Committed but docs stale | Update spec + task status to match code |
+| In-progress but no notes | Reset task to backlog |
+| External commits (no task ID) | Present drift report, ask user to resync |
+
+## Framework Resync Protocol
+
+1. **Audit** — subagents compare each spec vs actual code.
+1.5. **Auto-Repair** — Run Auto-Index Rebuilder, Pattern Discovery, Cross-Ref Repair. Present findings before updating.
+2. **Report** — present drift report to user.
+3. **Update** — apply changes after user approval only.
+4. **Validate** — check cross-references.
+5. **Commit** — `docs(framework): resync`
