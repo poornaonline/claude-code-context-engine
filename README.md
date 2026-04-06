@@ -4,7 +4,7 @@
 
 AI coding agents lose their memory every session. Like the protagonist in *Memento* — a man with short-term memory loss who uses tattoos, photos, and a document wall to function — this framework gives your agent a system of permanent markers, quick-scan cards, and deep reference files so it never starts from zero.
 
-Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (under 11k tokens), with ~138-190k tokens free for actual work.
+Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (under 14k tokens), with ~135-185k tokens free for actual work.
 
 > **New to this?** See [`examples/todo-app/`](examples/todo-app/) for a complete working example of what the framework produces.
 
@@ -43,7 +43,7 @@ Without this framework:
 
 With this framework:
 - Every session starts informed — the agent reads only what it needs and knows everything relevant
-- The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (under 11k tokens)
+- The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (under 14k tokens)
 - Architecture, conventions, and patterns are documented and always up to date
 - Crash recovery detects interrupted work and picks up where it left off — with a write-ahead log that survives crashes
 - New features go through a structured discuss → plan → approve → implement flow, with certainty ratings (Proven/Explored/Uncharted) that trigger spike tasks for unproven concepts before implementation begins
@@ -64,7 +64,7 @@ Quick-scan cards, ~50-100 tokens each. The agent flips through these to find wha
 
 - **`specs/INDEX.md`** — Domain routing table. For projects with 16+ modules, groups modules into domains (auth, data, ui, etc.). Each domain has its own `specs/[domain]/INDEX.md` with module cards including capability annotations (what each module provides and consumes). For smaller projects, a flat lookup table.
 - **`tasks/backlog.md`** — Task cards with **context-loaders**: `load:` (exact specs to read), `touch:` (files to modify), `patterns:` (patterns to reuse). Each task has a `type` field (`impl` for implementation, `spike` for research/validation). Spike tasks include a `verdict:` field tracking feasibility. The agent knows what to load before it loads anything.
-- **`tasks/in-progress.md`** — Status cards for session handoff. What was being done, where it stopped, what's next.
+- **`tasks/in-progress/`** — Per-task status files for session handoff (branch-safe). What was being done, where it stopped, what's next.
 
 ### Layer 3: The Wall (Full specs, task details, patterns)
 
@@ -97,7 +97,7 @@ Agent wakes up (zero memory)
 6. SUBAGENT SCOUT (reads specs, returns ~400 tok brief)
     │ "Create reset.ts, reuse email-sender pattern"
     ▼
-7. ACT (agent has ~138-190k tokens free for code)
+7. ACT (agent has ~135-185k tokens free for code)
     │
     ▼
 UPDATE (spec + in-progress.md + session log + commit)
@@ -147,7 +147,8 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
        │   └── ...
        ├── tasks/
        │   ├── backlog.md ────── Task cards with context-loaders
-       │   ├── in-progress.md ── Status cards (session handoff)
+       │   ├── backlog-index.md ─ Auto-generated navigation index
+       │   ├── in-progress/ ───── Per-task status files (branch-safe)
        │   ├── completed.md
        │   └── detail/
        ├── conventions.md
@@ -160,6 +161,7 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
   spikes/ ────────────────────── Spike POC code (not in src/)
   .ai-session-log ────────────── Write-ahead log (append-only)
   .ai-agent.lock ─────────────── Concurrent agent prevention
+  .ai-security-exclude ────────── Patterns excluded from framework searches
   .git/hooks/pre-commit ──────── Advisory doc-update reminder
 ```
 
@@ -168,7 +170,7 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
 | File / Directory | Purpose |
 |------|---------|
 | `prd-generator-prompt.md` | **Run first.** Generates a Product Requirements Document through discussion with you. Scans existing codebases or asks questions for new projects. |
-| `ai-framework-bootstrap-prompt.md` | **Run second.** Reads the PRD and builds the complete framework. Handles new and existing projects. Runs 17 structural validation checks. |
+| `ai-framework-bootstrap-prompt.md` | **Run second.** Reads the PRD and builds the complete framework. Handles new and existing projects. Runs 21 structural validation checks. |
 | `examples/todo-app/` | Complete reference output — a Todo API project showing every file the framework generates. Use this to understand what "good" looks like before running the prompts. |
 | `design/` | Internal architecture proposals (8 design docs). Not required to use the framework — kept as reference for contributors and anyone curious about the design decisions. |
 
@@ -234,6 +236,7 @@ Once set up, you interact naturally. The framework handles the rest:
 | *"Spike completed"* | Reads spike verdict. If FEASIBLE: unblocks dependent tasks. If NOT-FEASIBLE: flags to user, discusses alternatives |
 | *"What's the project status?"* | Summarizes: done, in progress, remaining |
 | *"Another dev pushed changes, resync"* | Scans codebase → compares against specs → presents drift report → updates after approval |
+| *"Quick fix: the login button is misaligned"* | Skips full retrieval chain — loads only the relevant spec, applies the fix, updates docs |
 | *"Refactor the payment module"* | Discusses scope → shows impact → implements incrementally after approval |
 
 ## Subagent Retrieval Workers
@@ -253,13 +256,15 @@ The framework uses ten specialized subagents (Claude Code's Task tool) to keep t
 | **Chain Walker** | Walk cross-link chains, return dependency brief | When tasks have `load-chain` field |
 | **Spec Verifier** | Staleness detection — compares spec front-matter against source files, returns FRESH/STALE verdict | Step 4.5 of retrieval chain (every session) |
 
+Each subagent has a **failure fallback** defined in the Subagent Failure Protocol: if a subagent call fails or times out, the main agent falls back to an inline read, a skip-and-flag, or a retry — depending on the subagent type. The main agent never halts due to a subagent failure.
+
 The main agent writes code. Everything else is delegated.
 
 ## How It Handles Problems
 
 ### Crash Recovery — Two Tiers
 
-**Tier 1: Inline (5 seconds, 4 checks).** Runs at the start of every session inside the main agent. Checks: is there a stale `.ai-agent.lock`? Does `in-progress.md` have an active task? Does `.ai-session-log` show an incomplete operation? Is there uncommitted work in git? If all four are clean, the agent moves on. If any flag, it resolves inline or escalates to Tier 2.
+**Tier 1: Inline (5 seconds, 4 checks).** Runs at the start of every session inside the main agent. Checks: is there a stale `.ai-agent.lock` (detected by session-ID + timestamp)? Does `tasks/in-progress/` have active task files? Does `.ai-session-log` show an incomplete operation? Is there uncommitted work in git? If all four are clean, the agent moves on. If any flag, it resolves inline or escalates to Tier 2.
 
 **Tier 2: Subagent audit (30 seconds).** The State Checker subagent runs a full audit — compares session log entries against completed work, checks for partial file writes, validates doc consistency. Returns a recovery plan the main agent executes.
 
@@ -269,7 +274,7 @@ The main agent writes code. Everything else is delegated.
 
 ### Agent Lock File
 
-`.ai-agent.lock` prevents two agents from working on the same project simultaneously. A running agent creates the lock; a new session sees it and warns you. Stale locks (from crashes) are detected by age and cleaned up automatically.
+`.ai-agent.lock` prevents two agents from working on the same project simultaneously. A running agent creates the lock with a session ID and timestamp; a new session sees it and warns you. Stale locks (from crashes) are detected by timestamp age and cleaned up automatically.
 
 ### Advisory Pre-Commit Hook
 
@@ -291,7 +296,7 @@ The main agent writes code. Everything else is delegated.
 
 - **Retrieval-first, not knowledge-first.** CLAUDE.md contains pointers, not knowledge. Agents navigate to information; they don't carry it all at once.
 - **Progressive disclosure everywhere.** Every file is layered. Read 60 tokens or 2,500 — same file, different depth. Agents stop reading when they have enough.
-- **Context budget is sacred.** Framework files total ≤12k tokens. That leaves ~138-190k tokens free for code and reasoning. Every token spent on framework docs is a token stolen from implementation.
+- **Context budget is sacred.** Framework files total ≤15k tokens. That leaves ~135-185k tokens free for code and reasoning. Every token spent on framework docs is a token stolen from implementation.
 - **Docs are the source of truth.** Code follows docs. If they diverge, docs get fixed first.
 - **Discuss before implementing.** New features, changes, removals — always discuss → plan → approve → build. Never jump to code.
 - **Small increments.** One endpoint, one component, one function per commit. Each commit includes doc updates. This is what makes crash recovery work.
@@ -299,6 +304,11 @@ The main agent writes code. Everything else is delegated.
 - **Subagents for everything except coding.** Reading specs, running tests, updating docs, checking for patterns — all delegated. Main agent context stays clean.
 - **Prove before build (CR-12).** Uncharted features get a time-boxed spike task that produces a feasibility verdict before any dependent implementation begins. This prevents building on assumptions that may be false.
 - **Core before chrome (CR-13).** Tasks are ordered by implementation layer: infrastructure/data → core logic → integration → UI/presentation. Build the foundation before the interface.
+- **Scale with tiers (CR-14).** Projects scale through four tiers — Lite (≤8 modules), Standard (9-15), Full (16-30), Mega (31+) — each activating progressively more infrastructure (domain indexes, auto-maintenance, hierarchical specs).
+- **Branch-safe files (CR-15).** Task status uses per-task files in `tasks/in-progress/` instead of a shared `in-progress.md`, with an auto-generated `backlog-index.md` for navigation. Eliminates merge conflicts across branches.
+- **Subagent resilience (CR-16).** If a subagent call fails, the main agent falls back to a defined protocol (inline read, skip, or retry) instead of halting. Every subagent has a failure fallback.
+- **Security exclusions (CR-17).** `.ai-security-exclude` defines patterns (secrets, credentials, keys) excluded from all framework searches and subagent scans. Prevents sensitive data from leaking into documentation.
+- **Context guard (CR-18).** Overflow prevention — the agent monitors accumulated context and triggers a checkpoint-and-restart if it approaches the window limit, rather than silently degrading.
 - **Framework evolves with code.** Every implementation updates the framework. It's never a stale snapshot.
 
 ## Architecture Decisions
@@ -307,7 +317,7 @@ The main agent writes code. Everything else is delegated.
 
 **Why markdown files?** AI agents read text. Markdown is universal, version-controllable via git, and has near-zero overhead. No database, no SaaS dependency, no build step.
 
-**Why ≤12k tokens for the whole framework?** AI agents have ~150-200k token context windows. If framework docs consume 15-20k tokens, that's 10-13% of the window gone before a single line of code is considered. Under 12k tokens, the framework is under 8% — leaving maximum room for the actual work. Every token was audited.
+**Why ≤15k tokens for the whole framework?** AI agents have ~150-200k token context windows. If framework docs consume 20-25k tokens, that's 13-17% of the window gone before a single line of code is considered. Under 15k tokens, the framework is under 10% — leaving maximum room for the actual work. Every token was audited.
 
 **Why progressive disclosure instead of small files?** Small files multiply file reads. Progressive disclosure means one file read, variable depth. An agent checking "what files does auth own?" reads the YAML front-matter (60 tokens) and stops. An agent implementing auth reads the full spec (2,500 tokens). Same file, no extra reads.
 
@@ -335,8 +345,8 @@ The main agent writes code. Everything else is delegated.
 | Spec file (full read) | ≤3,000 | Wall — full module detail |
 | Scout brief (returned) | ~400 | Compressed research from subagent |
 | **Total to "ready to code"** | **~9,680-10,680** | **4-5 file reads + 1 subagent call** |
-| Framework ceiling | ≤12,000 | Hard cap for all framework files |
-| **Free for code + reasoning** | **~138-190k** | **What actually matters** |
+| Framework ceiling | ≤15,000 | Hard cap for all framework files |
+| **Free for code + reasoning** | **~135-185k** | **What actually matters** |
 
 ## FAQ
 
@@ -353,7 +363,7 @@ Re-run `prd-generator-prompt.md` on the existing project. It scans current code,
 The framework now includes an agent lock file (`.ai-agent.lock`) that prevents concurrent agents from corrupting shared docs. If an agent is running, a second agent sees the lock and warns you. Stale locks from crashes are auto-cleaned. For best results: one agent at a time.
 
 **How much does this cost in tokens?**
-The bootstrap runs 15-20 subagent tasks (one-time cost). Day-to-day, each session uses 3-5 subagent calls. Framework files consume ≤12k tokens of context. The agent reaches "ready to code" in under 11k tokens (4-5 file reads + 1 subagent call). The rest of your ~138-190k window is for code.
+The bootstrap runs 15-20 subagent tasks (one-time cost). Day-to-day, each session uses 3-5 subagent calls. Framework files consume ≤15k tokens of context. The agent reaches "ready to code" in under 14k tokens (4-5 file reads + 1 subagent call). The rest of your ~135-185k window is for code.
 
 **Does the framework work for non-English projects?**
 The prompts are in English and generate English documentation. The framework itself is language-agnostic for code — it works with any programming language and any human language in the PRD, though the framework structure and file names remain in English.
@@ -362,10 +372,10 @@ The prompts are in English and generate English documentation. The framework its
 A write-ahead log. The agent writes what it intends to do before doing it. If a crash happens, the next session reads this log to know exactly where things stopped. Add it to `.gitignore` if you don't want it tracked — it's a local recovery tool, not project documentation.
 
 **What's in `.context/manifest.md`?**
-A token budget tracker. Lists every framework file with its current token count, so the agent (and you) can verify the framework stays within the ≤12k ceiling. Updated automatically during doc maintenance.
+A token budget tracker. Lists every framework file with its current token count, so the agent (and you) can verify the framework stays within the ≤15k ceiling. Updated automatically during doc maintenance.
 
 **How does the framework handle 50+ modules?**
-Five scale systems activate as projects grow: hierarchical domain indexing groups modules into domains so the routing table stays small, staleness detection verifies specs against code before the agent implements, diagnostic subagents trace multi-module bugs and cross-cutting concerns, multi-hop retrieval uses summary-only reads and chain walkers to keep token costs at 72% less than full reads, and auto-maintenance regenerates indexes from spec front-matter. The framework handles 100+ modules within the 12k token budget.
+Five scale systems activate as projects grow: hierarchical domain indexing groups modules into domains so the routing table stays small, staleness detection verifies specs against code before the agent implements, diagnostic subagents trace multi-module bugs and cross-cutting concerns, multi-hop retrieval uses summary-only reads and chain walkers to keep token costs at 72% less than full reads, and auto-maintenance regenerates indexes from spec front-matter. The framework handles 100+ modules within the 15k token budget.
 
 ## Contributing
 

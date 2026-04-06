@@ -8,7 +8,17 @@ STEP 2: CHECK FOR TRAUMA (crash recovery — 5 sec inline check)
         -> git status --short
         -> tail -1 .ai-session-log
         -> head -20 tasks/in-progress.md
-        -> All clean -> Step 3. Any dirty -> spawn State Checker subagent (Tier 2).
+        -> Verify BOOTSTRAP.md, INDEX.md, conventions.md exist (framework integrity)
+        -> If any missing -> spawn integrity repair subagent (rebuild INDEX from specs, flag missing specs as CRITICAL)
+        -> All clean -> Step 2.5. Any dirty -> spawn State Checker subagent (Tier 2).
+STEP 2.5: CHECK FOR MERGE CONFLICTS (2 sec)
+        -> git diff --name-only --diff-filter=U
+        -> If framework files have merge conflicts:
+           INDEX.md: re-run Auto-Index Rebuilder (generated file, never hand-merge)
+           patterns.md: accept both additions (append-only)
+           spec files: present conflict to user
+           in-progress.md: accept both (different tasks, no conflict)
+        -> All clear -> Step 3.
 STEP 3: DETERMINE MISSION (decision tree below)
 STEP 4: GATHER POLAROIDS (load only what mission requires)
 STEP 4.5: VERIFY FRESHNESS (10 seconds)
@@ -24,6 +34,7 @@ STEP 6: ACT
 | User Intent | Action |
 |---|---|
 | "Implement next task" | backlog.md -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
+| "Quick fix" (typo, 1-line change) | NO task card needed. Fix directly. Commit as `fix(scope): description` (no TASK-ID). Update spec only if the fix changes behavior. Log as QUICKFIX in session log. Criteria: touches <=2 files, no behavior change, no spec update needed. If any criterion fails, use normal task flow. |
 | "Fix a bug" | specs/INDEX.md -> find module (api-server/todos/database) -> load spec |
 | "Fix a multi-module bug" | Spawn Bug Tracer -> read primary spec -> Spec Readers for secondaries |
 | "Add a feature" | new-feature-template.md -> discuss before building |
@@ -37,7 +48,7 @@ STEP 6: ACT
 
 ## Context Loading Strategy
 
-**Budget:** Framework files consume <=12k tokens of ~150-200k context (under 11k tokens to "ready to code").
+**Budget:** Framework files consume <=15k tokens of ~150-200k context (under 11k tokens to "ready to code").
 
 **Progressive read order:** front-matter (60 tok) -> summary (100 tok) -> quick answers (200 tok) -> full detail only when implementing.
 
@@ -57,7 +68,7 @@ STEP 6: ACT
 | 1 | **Context Scout** | Before implementing any feature | <=500 tok research brief. Verify every REUSE file path exists. Note stale refs. |
 | 2 | **Spec Reader** | Need a single answer from 1-3 specs | 1-3 lines answering the question |
 | 3 | **Impact Analyzer** | Changing a module's interface (e.g., todo model schema) | Affected modules + files list |
-| 4 | **State Checker** | Trauma check (Step 2) finds dirty state | CLEAN / RESUME / RECONCILE / DRIFT |
+| 4 | **State Checker** | Trauma check (Step 2) finds dirty state | Uses SESSION_ID + TIMESTAMP lock check (not PID). Returns: CLEAN / RESUME / RECONCILE / DRIFT |
 | 5 | **Pattern Finder** | Before writing new code pattern | Existing match from patterns.md + codebase, or "NONE FOUND" |
 | 6 | **Bug Tracer** | Multi-module bug (e.g., auth + todos interaction) | Ranked suspect modules with confidence + interaction chain (<=500 tok) |
 | 7 | **Dependency Resolver** | Task has depends-on chain | Resolved chain + reading list with token estimates (<=500 tok) |
@@ -96,6 +107,10 @@ Start: specs/{start-module}.md, depth limit: {N}.
 Follow depends-on / cross-links through specs.
 Return: dependency brief summarizing full chain (<=500 tokens).
 ```
+
+### Subagent Failure Protocol (CR-16)
+
+If any subagent fails after 2 retries, the main agent uses a fallback instead of stalling. Fallbacks are inline approximations (e.g., Context Scout failure -> read primary spec summary directly; State Checker failure -> run Tier 1 checks only). Log `SUBAGENT_FALLBACK: {worker_type}` in session log. See the main framework prompt for the full fallback table.
 
 ## Research Brief Format (Context Scout Output)
 

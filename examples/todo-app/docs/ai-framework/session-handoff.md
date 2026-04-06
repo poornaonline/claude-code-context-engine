@@ -31,7 +31,7 @@ No previous sessions — this is a fresh project. Start with TASK-001.
 | `git status --short` | empty | any output |
 | `tail -1 .ai-session-log` | END or absent | no END |
 | `tasks/in-progress.md` | empty or has notes | active + no notes |
-| `.ai-agent.lock` | absent | present (check PID) |
+| `.ai-agent.lock` | absent or stale (>2hr) | fresh + active work signs |
 
 All clean -> proceed. Any dirty -> spawn State Checker subagent for Tier 2.
 
@@ -49,6 +49,8 @@ All clean -> proceed. Any dirty -> spawn State Checker subagent for Tier 2.
 
 1. **Audit** — subagents compare each spec vs actual code.
 1.5. **Auto-Repair** — Run Auto-Index Rebuilder, Pattern Discovery, Cross-Ref Repair. Present findings before updating.
+1.6. **Merge Resolution** — If any framework files have merge conflicts, resolve per CR-15: rebuild INDEX.md, append-merge patterns.md, present spec conflicts to user.
+1.7. **Integrity Check** — Verify BOOTSTRAP.md, INDEX.md, conventions.md exist. If any missing, rebuild from specs and flag as CRITICAL.
 2. **Report** — present drift report to user.
 3. **Update** — apply changes after user approval only.
 4. **Validate** — check cross-references.

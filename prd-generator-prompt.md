@@ -36,7 +36,7 @@ Use the Task tool to spawn subagents in parallel to scan the codebase:
 **Subagent B: Tech Stack Detection**
 - Detect ALL languages, frameworks, runtimes, and their versions from config files (package.json, Cargo.toml, go.mod, pyproject.toml, Gemfile, etc.)
 - Detect database systems from config files, ORMs, migration directories, connection strings
-- Detect third-party integrations from API client code, SDK imports, webhook handlers
+- Detect third-party integrations from API client code, SDK imports, webhook handlers. NEVER include actual secret values in output — report env var names and config file paths only. If you encounter what looks like a real API key or password, report "SECRET_FOUND in {file}:{line}" without the value.
 - Detect test frameworks and testing patterns
 - Detect CI/CD from workflow files (.github/workflows, .gitlab-ci.yml, Jenkinsfile, etc.)
 - Detect deployment targets from Dockerfiles, cloud config (serverless.yml, app.yaml, fly.toml, etc.)
@@ -341,7 +341,7 @@ For each external service:
 - **Version numbers are mandatory.** For every technology, include the explicit version. Use web_search — never guess from training data.
 - **For existing projects:** The PRD describes REALITY plus PLANS. Don't pretend things that aren't built yet are already done. Don't omit things that are built but not in the original vision.
 - **Mark unknowns as "TBD — needs decision" rather than guessing.** The AI framework handles TBDs correctly by flagging them.
-- **The PRD should be ≤ 8000 tokens.** If the project is large, keep module descriptions concise and put detailed specs in the AI framework's spec files instead. The PRD is the high-level blueprint, not the full specification.
+- **PRD token limits scale with project size.** ≤8,000 tokens for ≤15 modules. For 16-30 modules: ≤12,000 tokens. For 30+ modules: split into a core PRD (≤8,000 tokens: overview, tech stack, architecture, NFRs, environment) plus domain supplements (`docs/prd/[domain].md`, ≤4,000 tokens each, containing that domain's modules and features). The bootstrap reads the core PRD first, then loads domain supplements via subagents. The PRD is the high-level blueprint, not the full specification.
 - **Cross-reference by IDs.** Features use F-001 format, future features use FF-001. Modules reference each other by name. This enables the AI framework to build dependency graphs.
 - **Each module description should be written so that the first 2 sentences can serve as a standalone summary (≤100 tokens).** The AI framework extracts this for progressive disclosure — agents see summaries first, then load the full spec only when needed.
 - **Cross-module relationships must be explicit: which modules call which, share data with which.** The framework uses this to build a retrieval graph so agents can navigate from any module to its dependencies without scanning the entire codebase.
@@ -398,6 +398,8 @@ Also check:
 - Does every feature have a Certainty rating (Proven/Explored/Uncharted)?
 - Does every Uncharted feature describe what specifically needs validation?
 - If a Proven feature depends on an Uncharted module, is the feature's Certainty correctly elevated?
+- Is the PRD under its scale-appropriate token limit? (≤8k for ≤15 modules, ≤12k for 16-30, split required for 30+)
+- Are capability names unique across modules? (No two modules providing the same capability string)
 
 Report all findings."
 

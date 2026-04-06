@@ -85,10 +85,19 @@ Before creating framework files, set up project infrastructure the framework dep
 - Logic (~30 lines bash): check if source files are staged without any `docs/ai-framework/specs/` files staged. If so, print a yellow warning: "WARNING: Code staged without spec updates. Docs may drift. Consider updating specs." Exit 0 always — never blocks.
 
 ### Agent Lock File
-- Before starting work, create `.ai-agent.lock` containing `PID|TIMESTAMP|SESSION_ID`.
-- Check on session start: if lock exists and PID is alive, warn user about concurrent agent risk.
-- Remove on clean session end. Stale locks (PID dead) are cleaned up automatically.
+- Before starting work, create `.ai-agent.lock` with content: `SESSION_ID|TIMESTAMP|HOSTNAME`.
+- SESSION_ID: generated once per session as `s-$(date +%s | tail -c 7)` and reused for all operations. Stored in the session log's first START entry.
+- Check on session start: if lock exists, parse TIMESTAMP. If older than 2 hours, treat as stale and reclaim. If fresh (under 2 hours), check for active work signs: `git status --short` shows changes AND `.ai-session-log` last entry is not END. If both true, warn user about concurrent agent risk. Otherwise, reclaim the stale lock.
+- On clean session end: remove the lock.
 - Add `.ai-agent.lock` to `.gitignore`.
+- NEVER use PID (`$$`) for lock ownership — Claude Code shells are ephemeral, PIDs are meaningless across invocations.
+
+### Security Exclusion List
+- Create `.ai-security-exclude` at project root listing glob patterns to exclude from all agent searches.
+- Default contents: `.env*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `*.p12`, `*.pfx`, `id_rsa*`
+- Agents read this file at session start and apply patterns to all grep/glob operations.
+- Committed to the repo (not gitignored) so all developers share the same exclusion list.
+- All gitignored paths are ALSO excluded from agent searches (defense in depth).
 
 Document ALL infrastructure decisions in conventions.md and CLAUDE.md.
 
@@ -99,7 +108,7 @@ Document ALL infrastructure decisions in conventions.md and CLAUDE.md.
 CR-1: DOCS TRACK CODE. Task != done until spec reflects what was built/changed.
 CR-2: STOP AND ASK on any conflict (PRD vs code, spec vs reality, ambiguity).
 CR-3: NEVER ASSUME. Mark unknowns "NEEDS CLARIFICATION." Ask the user.
-CR-4: LOAD ONLY WHAT YOU NEED. Framework <=12k tokens. Subagents for bulk reading.
+CR-4: LOAD ONLY WHAT YOU NEED. Framework <=15k tokens in main context. Subagents for bulk reading. See .context/manifest.md for per-file budgets.
 CR-5: COMMIT AFTER EACH UNIT. Triggers: testable milestone, 5+ files changed, or 10min elapsed.
 CR-6: CHECK PATTERNS BEFORE WRITING. Reuse existing code. Add new reusable code to patterns.
 CR-7: LATEST LTS ONLY. web_search to verify versions. Never trust training data.
@@ -109,6 +118,11 @@ CR-10: DISCUSS BEFORE BUILDING. New features/changes -> new-feature-template.md 
 CR-11: VERIFY BEFORE TRUST. Run freshness check on specs before implementing. Stale spec = wrong code.
 CR-12: PROVE BEFORE BUILD. Uncharted work gets a time-boxed spike task before any dependent implementation begins. The spike produces a verdict (FEASIBLE / FEASIBLE-WITH-CONSTRAINTS / NOT-FEASIBLE), not production code. Dependent tasks remain blocked until the spike resolves. This prevents building on assumptions that may be false.
 CR-13: CORE BEFORE CHROME. Order implementation by layer: infrastructure/data → core logic → integration → UI/presentation. Even when all features are Proven, build the foundation before the interface.
+CR-14: SCALE WITH TIERS. Lite (<=5 files): inline in CLAUDE.md. Standard (6-15 modules): full framework with flat INDEX. Full (16-49 modules): hierarchical INDEX with domain routing. Mega (50+ modules): domain-only INDEX, domain indexes read via subagent, mandatory phase-split backlog.
+CR-15: BRANCH-SAFE FILES. Task status files split per-task to minimize merge surface. INDEX.md auto-generated from spec front-matter (never hand-edited). patterns.md append-only. On merge conflict in any framework file: re-run Auto-Index Rebuilder, never hand-merge INDEX files.
+CR-16: SUBAGENT RESILIENCE. Every subagent call has a fallback strategy. If a subagent fails after 2 retries, the main agent uses the fallback (see Subagent Failure Protocol), never stalls.
+CR-17: SECURITY EXCLUSIONS. All codebase searches (grep, glob) MUST exclude: .env*, *.pem, *.key, *credentials*, *secret*, and all .gitignore paths. Read .ai-security-exclude at session start. If a search result looks like a secret, return "REDACTED — potential secret in {file_path}" instead of the value.
+CR-18: CONTEXT GUARD. If context usage exceeds 60%, stop loading framework files and use subagents exclusively. At 80%, trigger end-of-session: commit current work, update in-progress, hand off. Never let context overflow silently.
 
 ## Priority Hierarchy (when sources conflict)
 1. Direct user instruction (always wins)
@@ -140,8 +154,17 @@ STEP 1: READ TATTOOS (CLAUDE.md — auto-loaded)
 STEP 2: CHECK FOR TRAUMA (crash recovery — 5 sec inline check)
         -> git status --short
         -> tail -1 .ai-session-log
-        -> head -20 tasks/in-progress.md
+        -> ls tasks/in-progress/ (or head -20 tasks/in-progress.md if monolithic)
+        -> Verify BOOTSTRAP.md, INDEX.md, conventions.md exist (framework integrity)
+        -> If any missing -> spawn integrity repair subagent (rebuild INDEX from specs, flag missing specs as CRITICAL)
         -> All clean -> Step 3. Any dirty -> spawn State Checker subagent (Tier 2).
+STEP 2.5: CHECK FOR MERGE CONFLICTS (2 sec)
+        -> git diff --name-only --diff-filter=U
+        -> If framework files have merge conflicts:
+           INDEX.md: re-run Auto-Index Rebuilder (generated file, never hand-merge)
+           patterns.md: accept both additions (append-only)
+           spec files: present conflict to user
+           in-progress/: accept both (different tasks, no conflict)
 STEP 3: DETERMINE MISSION (decision tree below)
 STEP 4: GATHER POLAROIDS (load only what mission requires)
 STEP 4.5: VERIFY FRESHNESS (10 seconds)
@@ -156,20 +179,23 @@ STEP 6: ACT
 
 | User Intent | Action |
 |---|---|
-| "Implement next task" | backlog.md -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
+| "Implement next task" | backlog-index.md (if split) or backlog.md -> find active phase -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
+| "Quick fix" (typo, 1-line change) | NO task card needed. Fix directly. Commit as `fix(scope): description` (no TASK-ID). Update spec only if the fix changes behavior. Log as QUICKFIX in session log. Criteria: touches <=2 files, no behavior change, no spec update needed. If any criterion fails, use normal task flow. |
 | "Fix a bug" | specs/INDEX.md -> find module -> load spec |
 | "Fix a multi-module bug" | Spawn Bug Tracer -> read primary spec -> Spec Readers for secondaries |
 | "Add a feature" | new-feature-template.md -> discuss before building |
 | "Add feature (novel concept)" | Spawn Cross-Module Scout (capability matching) -> discuss -> plan |
 | "Refactor across modules" | Spawn Cross-Module Scout -> Impact Analyzer -> parallel Spec Readers |
 | "Understand system flow" | Spawn Cross-Module Scout -> returns interaction chain + reading order |
-| "Continue previous" | in-progress.md -> read session notes -> resume |
+| "Continue previous" | tasks/in-progress/TASK-NNN.md (or in-progress.md if monolithic) -> read session notes -> resume |
 | "Project status" | backlog + in-progress + completed summary |
 | "Spike completed" | in-progress.md -> read spike verdict -> if FEASIBLE: unblock dependent tasks in backlog. If NOT-FEASIBLE: flag to user, discuss alternatives, potentially remove dependent tasks |
 | "Resync framework" | session-handoff.md resync protocol |
 
 **Context Loading Strategy:**
-Budget: framework files consume <=12k tokens of ~150-200k context (under 11k tokens to "ready to code"). Read progressively: front-matter (60 tok) -> summary (100 tok) -> quick answers (200 tok) -> full detail only when implementing. If a task needs >2 full specs, spawn a Context Scout subagent instead of loading directly.
+Budget: framework files consume <=15k tokens in main context. Breakdown: ~7k fixed routing overhead (CLAUDE.md 2.5k + BOOTSTRAP.md 4k + manifest 0.5k) + up to 8k task-specific docs (specs + task detail + patterns). The "ready to code" path takes under 11k: routing overhead + task card + INDEX lookup + scout brief. Read progressively: front-matter (60 tok) -> summary (100 tok) -> quick answers (200 tok) -> full detail only when implementing. If a task needs >2 full specs, spawn a Context Scout subagent instead of loading directly.
+
+**Overflow prevention (CR-18):** After loading framework files, count approximate tokens. If >15k on framework alone, stop and use subagents. During implementation, if conversation turns exceed 20 exchanges, proactively trigger session handoff. At 50+ modules (mega tier, CR-14): top-level INDEX.md loaded directly (~300 tok), domain INDEX files read via Spec Reader subagent, never loaded into main context.
 
 **Multi-Hop Strategy:**
 - Primary spec: read FULL (3,000 tokens)
@@ -179,16 +205,34 @@ Budget: framework files consume <=12k tokens of ~150-200k context (under 11k tok
 
 **Subagent Retrieval Workers — 10 types:**
 
-1. **Context Scout** — Pre-reads all task-relevant specs. Returns <=500 token research brief. Spawn before implementing any feature. Verification rule: for every pattern in REUSE, verify file path exists. Note stale references.
+1. **Context Scout** — Pre-reads all task-relevant specs. Returns <=500 token research brief. Spawn before implementing any feature. Verification rule: for every pattern in REUSE, verify file path exists. Note stale references. **Scaling (CR-14):** If task's load-chain has >8 specs, MUST split: partition by domain, spawn one scout per domain (max 4 parallel), merge partial briefs. Never send >8 specs to one scout.
 2. **Spec Reader** — Answers a single question from 1-3 specs. Returns 1-3 lines.
 3. **Impact Analyzer** — Reads all specs referencing a module. Returns affected modules + files list.
-4. **State Checker** — Runs full Tier 2 crash recovery audit. Returns: CLEAN | RESUME | RECONCILE | DRIFT.
-5. **Pattern Finder** — Searches patterns.md + greps codebase. Returns existing match or "NONE FOUND."
-6. **Bug Tracer** — Takes symptom description, reads INDEX keywords + greps codebase. Returns ranked suspect modules with confidence + interaction chain. <=500 tokens.
-7. **Dependency Resolver** — Takes task ID, walks dependency chain through backlog/completed. Returns resolved chain + reading list with token estimates. <=500 tokens.
-8. **Cross-Module Scout** — Reads ALL spec front-matter + summaries (not full specs). Returns affected modules, connections, reading order. For cross-cutting work. <=500 tokens.
-9. **Chain Walker** — Takes starting spec + depth limit, follows cross-links through specs, returns dependency brief summarizing full chain. Prevents multi-hop sequential reads. <=500 tokens.
+4. **State Checker** — Runs full Tier 2 crash recovery audit. Uses SESSION_ID + TIMESTAMP lock check (not PID). Returns: CLEAN | RESUME | RECONCILE | DRIFT.
+5. **Pattern Finder** — Searches patterns.md + greps codebase (with security exclusions per CR-17). Returns existing match or "NONE FOUND."
+6. **Bug Tracer** — Takes symptom description, reads INDEX keywords + greps codebase (scoped to spec `owners:` directories only, with security exclusions per CR-17). Returns ranked suspect modules with confidence + interaction chain. <=500 tokens.
+7. **Dependency Resolver** — Takes task ID, walks dependency chain through backlog-index.md/phase files (or monolithic backlog.md) and completed.md. Returns resolved chain + reading list with token estimates. <=500 tokens.
+8. **Cross-Module Scout** — Reads ALL spec front-matter + summaries (not full specs). Returns affected modules, connections, reading order. For cross-cutting work. <=500 tokens. **At 50+ modules (CR-14):** split by domain, one scout per domain, max 4 parallel.
+9. **Chain Walker** — Takes starting spec + depth limit (default 5, configurable per project in manifest.md), follows cross-links through specs, returns dependency brief summarizing full chain. Reports circular dependencies instead of looping. <=500 tokens.
 10. **Spec Verifier** — Runs from Step 4.5. For each spec in task's `load:` field: check owned dirs exist, verify file paths in spec body exist, compare git log dates to last-updated. Returns per spec: FRESH | STALE | CRITICAL + mismatches.
+
+**Subagent Failure Protocol (CR-16):**
+1. First failure: retry with same parameters.
+2. Second failure: retry with reduced scope (fewer specs, lower depth).
+3. Third failure: use fallback, log "SUBAGENT_FALLBACK: {worker_type}" in session log.
+
+| Worker | Fallback on failure |
+|--------|---------------------|
+| Context Scout | Read primary spec summary + quick answers directly (~300 tok). Skip secondary specs. |
+| Spec Reader | Main agent reads the spec's Summary section directly. |
+| Impact Analyzer | Main agent reads INDEX.md provides/consumes columns for the module. |
+| State Checker | Main agent runs Tier 1 checks inline. Skip Tier 2. Log RECOVERY_SKIPPED. |
+| Pattern Finder | Main agent greps for the pattern name directly. Accept NONE FOUND risk. |
+| Bug Tracer | Main agent reads INDEX.md keyword hints, picks most likely module, loads that spec. |
+| Dependency Resolver | Main agent reads task's deps field, checks completed.md manually. |
+| Cross-Module Scout | Split by domain, retry per-domain. If still fails: read INDEX.md only. |
+| Chain Walker | Reduce depth by 1, retry. At depth 2: return only direct dependencies. |
+| Spec Verifier | Skip freshness for that spec. Log FRESHNESS_SKIPPED. Proceed with caution. |
 
 **Research Brief Format (Context Scout output):**
 ```
@@ -247,6 +291,10 @@ auth-core -> data/db-core, infra/config
 
 Lookup: 2 reads max. INDEX.md -> domain -> domain/INDEX.md -> module spec.
 Fuzzy fallback: 1) keyword match in KEYWORD_HINTS, 2) grep Provides/Consumes across domain indexes, 3) glob + frontmatter grep.
+
+**Mega-scale (50+ modules, CR-14):** INDEX.md stays under 500 tokens: list DOMAINS only (no module rows). Each domain INDEX stays under 500 tokens. If a domain has 15+ modules, sub-divide it (e.g., "data-core", "data-cache"). At mega scale, the agent does NOT load domain INDEX files into main context — route through Spec Reader subagent: "Which module owns [keyword]?"
+
+**Merge safety (CR-15):** INDEX.md is auto-generated from spec front-matter by the Auto-Index Rebuilder. Never hand-edit. On merge conflict, delete and rebuild. Add to each INDEX.md: `<!-- AUTO-GENERATED from spec front-matter. Do not edit. Run resync to rebuild. -->` Capability names must be unique across modules — no two modules may `provide:` the same capability string.
 
 ### 3. specs/[module].md (<=3,000 tokens each) — Module Wall Documents
 
@@ -321,22 +369,60 @@ Type is `impl` (implementation) or `spike` (research/validation). Spike tasks in
 
 Every task card carries its own context-loader: `load:` lists exact specs, `load-chain:` is the transitive closure of cross-links from `load:` specs (pre-computed at task creation by Dependency Resolver subagent), `touch:` lists files to modify, `patterns:` lists patterns to reuse. The agent never guesses what context to load.
 
-When backlog exceeds 3,000 tokens, split into phase files with backlog-index.md.
+**Backlog splitting (CR-14, CR-15):** When backlog exceeds 3,000 tokens OR project has 3+ developers, split into phase files:
 
-### 5. tasks/in-progress.md — Status Polaroid Cards
+```
+tasks/
+  backlog-index.md          # routing: phase -> file, next-task pointer
+  backlog-phase-1.md        # Foundation (infra/data tasks)
+  backlog-phase-2.md        # Core features
+  backlog-phase-3.md        # Integration + UI
+  in-progress/              # one file per active task (branch-safe)
+    TASK-042.md
+  completed.md              # append-only done pile
+  detail/
+    TASK-NNN.md
+```
 
-~90 tokens per card. The "last photo before memory loss."
+**backlog-index.md format:**
+```yaml
+---
+type: backlog-index
+phases: N
+active-phase: 1
+next-task: TASK-NNN
+---
+```
+```
+| Phase | File | Tasks | Status |
+|-------|------|-------|--------|
+| 1 - Foundation | backlog-phase-1.md | TASK-001..012 | active |
+| 2 - Core | backlog-phase-2.md | TASK-013..030 | queued |
+| 3 - Integration | backlog-phase-3.md | TASK-031..045 | queued |
+```
+
+Splitting rules: 8-15 tasks per phase, grouped by dependency cluster. Phase boundaries align with CR-13 layers. Agent reads backlog-index.md (~100 tok) -> active phase file only. Never loads all phases.
+
+For projects under the split threshold: use monolithic backlog.md (same format as before).
+
+### 5. tasks/in-progress/ — Per-Task Status Cards (branch-safe)
+
+One file per active task: `tasks/in-progress/TASK-NNN.md`. Created when task starts, deleted when completed. ~90 tokens each.
 ```
 ### TASK-042 — In Progress
+- Owner: [developer name or session ID]
+- Started: YYYY-MM-DD
 - Done: [what's completed]
 - Next: [what remains]
 - Last commit: [hash] — [message]
 - Blockers: [or "none"]
 ```
 
-### 6. tasks/completed.md — Done Pile
+**Merge safety (CR-15):** Each developer's active task is a separate file — no merge conflicts on concurrent work. For solo projects or migration from monolithic format: a single `in-progress.md` file is also valid. The wakeup ritual checks both locations.
 
-Last 20 tasks only. Archive older to `tasks/archive/completed-YYYY-MM.md`. Compact format: task ID, title, completion date.
+### 6. tasks/completed.md — Done Pile (append-only)
+
+Last 20 tasks only. Archive older to `tasks/archive/completed-YYYY-MM.md`. Compact format: task ID, title, completion date. New entries at the TOP (append-only for merge safety — `git merge` handles top-additions cleanly).
 
 ### 7. tasks/detail/[TASK-NNN].md (<=2,000 tokens) — Task Detail
 
@@ -385,6 +471,8 @@ last-updated: YYYY-MM-DD
 
 <=3,000 tokens. Split by layer if larger.
 
+**Merge safety (CR-15):** patterns.md is append-only during normal work. New patterns go at the BOTTOM of the index table and details section. Only a full resync reorders. Never include real credential values in pattern usage examples — use PLACEHOLDER_VALUE.
+
 ### 10. session-handoff.md — Context Reset Protocol
 
 **End-of-Session Checklist:**
@@ -399,8 +487,8 @@ last-updated: YYYY-MM-DD
 |-------|-------|-----------------|
 | `git status --short` | empty | any output |
 | `tail -1 .ai-session-log` | END or absent | no END |
-| `in-progress.md` | empty or has notes | active + no notes |
-| `.ai-agent.lock` | absent | present (check PID) |
+| `tasks/in-progress/` (or in-progress.md) | empty or has notes | active task + no notes |
+| `.ai-agent.lock` | absent or stale (>2hr) | fresh (<2hr) + active work signs |
 
 All clean -> proceed. Any dirty -> spawn State Checker subagent for Tier 2.
 
@@ -417,6 +505,8 @@ All clean -> proceed. Any dirty -> spawn State Checker subagent for Tier 2.
 **Framework Resync Protocol:**
 1. **Audit** — subagents compare each spec vs actual code.
 1.5. **Auto-Repair** — Run Auto-Index Rebuilder (regenerate INDEX.md from spec front-matter). Run Pattern Discovery (find reusable code not in patterns.md). Run Cross-Ref Repair (verify all links). Present all findings before updating.
+1.6. **Merge Resolution (CR-15)** — If any framework files have unresolved merge markers: INDEX files are regenerated (never hand-merged), append-only files (patterns, completed) accept both sides, per-task in-progress files accept both, spec conflicts go to user.
+1.7. **Integrity Check** — Verify all expected framework files exist (BOOTSTRAP.md, INDEX.md, conventions.md, all specs in INDEX, all task files in backlog). Report MISSING files. Auto-rebuild INDEX and backlog-index from remaining sources. Flag missing specs as CRITICAL.
 2. **Report** — present drift report to user.
 3. **Update** — apply changes after user approval only.
 4. **Validate** — check cross-references.
@@ -452,6 +542,8 @@ Never skip Phase 1. If Phase 1 identifies Uncharted certainty, Phase 1.5 is mand
 
 Agent reads this to plan context budget before loading anything.
 
+**Budget enforcement (CR-4, CR-14):** If sum of "always loaded" files exceeds 7k, the framework is misconfigured — flag for resync. If sum of loaded files for any single task exceeds 15k, spawn subagents instead of direct loading. At 50+ modules (mega tier): INDEX.md routing goes through Spec Reader subagent, not main context.
+
 ### 13. Auto-Maintenance System
 
 Two modes, logged in `.maintenance-log.md` (append-only):
@@ -469,7 +561,8 @@ Two modes, logged in `.maintenance-log.md` (append-only):
 | Pattern Discovery | Find unexported utilities not in patterns.md |
 | Cross-Ref Repair | Verify all cross-links between specs |
 | Owned Dir Sync | Compare spec `owners:` vs filesystem |
-| Load-Chain Refresh | Recompute `load-chain:` fields in backlog |
+| Load-Chain Refresh | Recompute `load-chain:` fields in backlog (lazy: only for active phase tasks) |
+| Framework Integrity | Verify all expected files exist. Report MISSING. Auto-rebuild INDEX/backlog-index. Flag missing specs as CRITICAL. |
 
 All return findings, write nothing until user approves.
 
@@ -535,9 +628,15 @@ You (orchestrator) must manage your own context. Act as a coordinator: read this
 
 **Subagent 2: Infrastructure Setup**
 Pass: PRD analysis + project state summaries.
-"Set up project infrastructure: git (init if needed, .gitignore, verify conventional commits), package manager (detect/install), test framework (detect/setup), environment config (.env.example if needed). Create .ai-session-log (empty), install advisory pre-commit hook, set up .ai-agent.lock mechanism. For new projects: scaffold directory structure, install dependencies per PRD. Commit changes."
+"Set up project infrastructure: git (init if needed, .gitignore, verify conventional commits), package manager (detect/install), test framework (detect/setup), environment config (.env.example if needed). Create .ai-session-log (empty), install advisory pre-commit hook, set up .ai-agent.lock mechanism using SESSION_ID + TIMESTAMP (not PID — see Infrastructure Prerequisites). Create .ai-security-exclude with default exclusion patterns. For new projects: scaffold directory structure, install dependencies per PRD. Commit changes."
+
+### Phase 2.5: Contract Validation (orchestrator, inline)
+
+Before spawning Phase 3 subagents, the orchestrator validates the shared contract: every PRD module appears in the contract, every consumed capability is provided by some module, domain groupings are complete, certainty ratings match PRD. Fix errors before they multiply across 5 parallel subagents.
 
 ### Phase 3: Framework Files (5 parallel subagents)
+
+**50+ module guard (CR-14):** If PRD analysis identifies 50+ modules: Phase 3B MUST split — one sub-subagent per domain, max 15 modules each. Phase 3C MUST split backlog into phase files. Phase 4 validation splits — one validator per domain + one cross-domain validator. Orchestrator checkpoints after each domain's specs before proceeding to tasks.
 
 Pass each subagent: PRD analysis summary + project state summary + shared contract:
 
@@ -589,11 +688,11 @@ This means the top of the backlog will always be: unblocked spike tasks for Unch
 3. Every feature has a task in backlog or completed
 4. Task IDs consistent across backlog, specs, and detail files
 5. Each task's load: field references existing spec files
-6. Token budgets: CLAUDE.md <=2500, BOOTSTRAP.md <=4000, specs <=3000
+6. Token budgets: CLAUDE.md <=2500, BOOTSTRAP.md <=4000, specs <=3000, INDEX.md <=500 (mega) or <=1500 (standard/full), total always-loaded <=7000
 7. All specs have YAML front-matter (module, purpose, status, owners, depends-on, provides, consumes)
 8. patterns.md index matches detail sections
 9. Each domain INDEX contains all modules in that domain's directory
-10. Capability annotations consistent — if module A consumes X, some module must provide X
+10. Capability annotations consistent — if module A consumes X, some module must provide X. No two modules provide the same capability string (namespace collision).
 11. Every task's load-chain: field contains valid spec paths
 12. All domain INDEX cross-domain dependencies reference real domain/module pairs
 13. Auto-maintenance files exist (.maintenance-log.md)
@@ -601,6 +700,10 @@ This means the top of the backlog will always be: unblocked spike tasks for Unch
 15. Every PRD feature with Certainty: Uncharted has at least one spike task in the backlog
 16. Every spike task has dependent implementation tasks that list the spike as a blocker
 17. No implementation task for an Uncharted feature appears before its spike in the backlog ordering
+18. If backlog is split: backlog-index.md references all phase files, all exist, every task in exactly one phase, no duplicate task IDs across phases
+19. Task dependency graph is acyclic (no circular dependencies)
+20. .ai-security-exclude exists with default exclusion patterns
+21. No framework file contains common secret patterns (AWS key format, private key headers, connection strings with passwords)
 Report all gaps. Check real structural properties only — no simulations."
 
 ### Phase 5: Fixes (1 subagent)
@@ -624,7 +727,8 @@ Do NOT write any application code. The build produces:
 project-root/
   CLAUDE.md                              # tattoo, <=2500 tokens
   .ai-session-log                        # append-only write-ahead log
-  .ai-agent.lock                         # concurrent agent prevention
+  .ai-agent.lock                         # SESSION_ID|TIMESTAMP|HOSTNAME (not PID)
+  .ai-security-exclude                   # glob patterns excluded from all agent searches
   .git/hooks/pre-commit                  # advisory doc-update reminder
   docs/ai-framework/
     BOOTSTRAP.md                         # wakeup ritual + decision tree + 10 subagent workers
@@ -642,9 +746,12 @@ project-root/
         [module-name].md ...             # progressive disclosure specs with provides/consumes
       [module-name].md ...               # flat specs (if <=15 modules)
     tasks/
-      backlog.md                         # task cards with context-loaders + load-chain
-      in-progress.md                     # session status cards
-      completed.md                       # done pile
+      backlog.md                         # task cards with context-loaders + load-chain (monolithic)
+      backlog-index.md                   # phase routing table (if split, CR-14)
+      backlog-phase-N.md                 # phase files (if split)
+      in-progress/                       # one file per active task (branch-safe, CR-15)
+        [TASK-NNN].md                    # or monolithic in-progress.md for solo projects
+      completed.md                       # append-only done pile
       detail/
         [TASK-NNN].md ...                # task breakdowns + dependency snapshots
   spikes/                                  # spike POC code (not in src/), created by CR-12

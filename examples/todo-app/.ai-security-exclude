@@ -1,0 +1,7 @@
+.env*
+*.pem
+*.key
+*credentials*
+*secret*
+*.p12
+data/*.db
