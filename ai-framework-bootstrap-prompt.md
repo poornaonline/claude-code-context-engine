@@ -166,7 +166,7 @@ STEP 6: ACT
 | "Resync framework" | session-handoff.md resync protocol |
 
 **Context Loading Strategy:**
-Budget: framework files consume <=12k tokens of ~150-200k context (~9,680 tokens to "ready to code"). Read progressively: front-matter (60 tok) -> summary (100 tok) -> quick answers (200 tok) -> full detail only when implementing. If a task needs >2 full specs, spawn a Context Scout subagent instead of loading directly.
+Budget: framework files consume <=12k tokens of ~150-200k context (under 11k tokens to "ready to code"). Read progressively: front-matter (60 tok) -> summary (100 tok) -> quick answers (200 tok) -> full detail only when implementing. If a task needs >2 full specs, spawn a Context Scout subagent instead of loading directly.
 
 **Multi-Hop Strategy:**
 - Primary spec: read FULL (3,000 tokens)

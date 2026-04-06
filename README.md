@@ -1,10 +1,12 @@
 # Claude Code Context Engine
 
-**Retrieval-optimized documentation framework for AI coding agents — built on the Ghajini Memory Architecture.**
+**v1.0.0** | Retrieval-optimized documentation framework for AI coding agents — built on the Ghajini Memory Architecture.
 
 AI coding agents lose their memory every session. Like the protagonist in *Ghajini* — a man with short-term memory loss who uses tattoos, photos, and a document wall to function — this framework gives your agent a system of permanent markers, quick-scan cards, and deep reference files so it never starts from zero.
 
-Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (~9,680 tokens), with ~138-190k tokens free for actual work.
+Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (under 11k tokens), with ~138-190k tokens free for actual work.
+
+> **New to this?** See [`examples/todo-app/`](examples/todo-app/) for a complete working example of what the framework produces.
 
 ## Works with
 
@@ -41,7 +43,7 @@ Without this framework:
 
 With this framework:
 - Every session starts informed — the agent reads only what it needs and knows everything relevant
-- The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (~9,680 tokens)
+- The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (under 11k tokens)
 - Architecture, conventions, and patterns are documented and always up to date
 - Crash recovery detects interrupted work and picks up where it left off — with a write-ahead log that survives crashes
 - New features go through a structured discuss → plan → approve → implement flow
@@ -76,25 +78,29 @@ This is how an agent goes from zero memory to productive in seconds:
 Agent wakes up (zero memory)
     │
     ▼
-TATTOO (CLAUDE.md, auto-loaded, ~2,400 tok)
+1. TATTOO (CLAUDE.md, auto-loaded, ~2,400 tok)
     │ "Go to BOOTSTRAP.md"
     ▼
-DECISION TREE (BOOTSTRAP.md, ~3,500 tok)
+2. CRASH CHECK (Tier 1 — 5 sec inline)
+    │ git status, session log, in-progress, lock file
+    │ All clean → continue. Any dirty → Tier 2 subagent.
+    ▼
+3. DECISION TREE (BOOTSTRAP.md, ≤4,000 tok)
     │ "Your mission maps to: backlog.md"
     ▼
-POLAROID (backlog.md → task card, ~80 tok)
+4. POLAROID (backlog.md → task card, ~80 tok)
     │ "Load: specs/auth.md, specs/email.md"
     ▼
-VERIFY (freshness check, ~10 sec)
+5. VERIFY FRESHNESS (~10 sec)
     │ "specs/auth.md is FRESH, proceed"
     ▼
-SUBAGENT SCOUT (reads specs, returns ~400 tok brief)
+6. SUBAGENT SCOUT (reads specs, returns ~400 tok brief)
     │ "Create reset.ts, reuse email-sender pattern"
     ▼
-ACT (agent has ~138k tokens free for code)
+7. ACT (agent has ~138-190k tokens free for code)
     │
     ▼
-TAKE A PHOTO (update spec + in-progress.md + session log)
+UPDATE (spec + in-progress.md + session log + commit)
 ```
 
 No wasted reads. No loading the entire knowledge base. The agent follows pointers, loads only what the task requires, and keeps its context window clean for code.
@@ -145,7 +151,7 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
        │   └── detail/
        ├── conventions.md
        ├── patterns.md ───────── Organized by PROBLEM SOLVED
-       ├── session-handoff.md ── Tier 1/2 crash recovery tables
+       ├── session-handoff.md ── Crash recovery, resync, auto-maintenance
        ├── new-feature-template.md
        ├── .maintenance-log.md ─ Auto-maintenance run history
        └── .context/
@@ -157,10 +163,12 @@ CLAUDE.md (tattoo — routing pointers, ≤2,500 tok)
 
 ## What's Included
 
-| File | Purpose |
+| File / Directory | Purpose |
 |------|---------|
 | `prd-generator-prompt.md` | **Run first.** Generates a Product Requirements Document through discussion with you. Scans existing codebases or asks questions for new projects. |
-| `ai-framework-bootstrap-prompt.md` | **Run second.** Reads the PRD and builds the complete framework. Handles new and existing projects. Runs 12+ validation simulations. |
+| `ai-framework-bootstrap-prompt.md` | **Run second.** Reads the PRD and builds the complete framework. Handles new and existing projects. Runs 14 structural validation checks. |
+| `examples/todo-app/` | Complete reference output — a Todo API project showing every file the framework generates. Use this to understand what "good" looks like before running the prompts. |
+| `design/` | Internal architecture proposals (8 design docs). Not required to use the framework — kept as reference for contributors and anyone curious about the design decisions. |
 
 ## Detailed Setup
 
@@ -279,7 +287,7 @@ The main agent writes code. Everything else is delegated.
 
 - **Retrieval-first, not knowledge-first.** CLAUDE.md contains pointers, not knowledge. Agents navigate to information; they don't carry it all at once.
 - **Progressive disclosure everywhere.** Every file is layered. Read 60 tokens or 2,500 — same file, different depth. Agents stop reading when they have enough.
-- **Context budget is sacred.** Framework files total ≤12k tokens. That leaves ~138-188k tokens free for code and reasoning. Every token spent on framework docs is a token stolen from implementation.
+- **Context budget is sacred.** Framework files total ≤12k tokens. That leaves ~138-190k tokens free for code and reasoning. Every token spent on framework docs is a token stolen from implementation.
 - **Docs are the source of truth.** Code follows docs. If they diverge, docs get fixed first.
 - **Discuss before implementing.** New features, changes, removals — always discuss → plan → approve → build. Never jump to code.
 - **Small increments.** One endpoint, one component, one function per commit. Each commit includes doc updates. This is what makes crash recovery work.
@@ -293,7 +301,7 @@ The main agent writes code. Everything else is delegated.
 
 **Why markdown files?** AI agents read text. Markdown is universal, version-controllable via git, and has near-zero overhead. No database, no SaaS dependency, no build step.
 
-**Why ≤12k tokens for the whole framework?** AI agents have ~150-200k token context windows. If framework docs consume 15-20k tokens, that's 10-13% of the window gone before a single line of code is considered. At 12k tokens, the framework is under 8% — leaving maximum room for the actual work. Every token was audited.
+**Why ≤12k tokens for the whole framework?** AI agents have ~150-200k token context windows. If framework docs consume 15-20k tokens, that's 10-13% of the window gone before a single line of code is considered. Under 12k tokens, the framework is under 8% — leaving maximum room for the actual work. Every token was audited.
 
 **Why progressive disclosure instead of small files?** Small files multiply file reads. Progressive disclosure means one file read, variable depth. An agent checking "what files does auth own?" reads the YAML front-matter (60 tokens) and stops. An agent implementing auth reads the full spec (2,500 tokens). Same file, no extra reads.
 
@@ -314,15 +322,15 @@ The main agent writes code. Everything else is delegated.
 | Component | Tokens | Purpose |
 |-----------|--------|---------|
 | CLAUDE.md | ~2,400 | Tattoo — navigation pointers |
-| BOOTSTRAP.md | ~3,500 | Decision tree + subagent definitions |
+| BOOTSTRAP.md | ≤4,000 | Decision tree + subagent definitions |
 | Task card (from backlog) | ~80 | Polaroid — context-loader fields |
-| specs/INDEX.md | ~300 | Domain routing table (down from 800 with hierarchical indexing) |
-| specs/[domain]/INDEX.md | ~400-500 | Domain module cards (only the relevant domain loaded) |
-| Spec file (full read) | ~2,500 | Wall — full module detail |
+| specs/INDEX.md | ~300 | Domain routing table |
+| specs/[domain]/INDEX.md | ~400-500 | Domain module cards (16+ module projects only) |
+| Spec file (full read) | ≤3,000 | Wall — full module detail |
 | Scout brief (returned) | ~400 | Compressed research from subagent |
-| **Total to "ready to code"** | **~9,180-9,680** | **4-5 file reads + 1 subagent call** |
+| **Total to "ready to code"** | **~9,680-10,680** | **4-5 file reads + 1 subagent call** |
 | Framework ceiling | ≤12,000 | Hard cap for all framework files |
-| **Free for code + reasoning** | **~138-188k** | **What actually matters** |
+| **Free for code + reasoning** | **~138-190k** | **What actually matters** |
 
 ## FAQ
 
@@ -339,7 +347,7 @@ Re-run `prd-generator-prompt.md` on the existing project. It scans current code,
 The framework now includes an agent lock file (`.ai-agent.lock`) that prevents concurrent agents from corrupting shared docs. If an agent is running, a second agent sees the lock and warns you. Stale locks from crashes are auto-cleaned. For best results: one agent at a time.
 
 **How much does this cost in tokens?**
-The bootstrap runs 15-20 subagent tasks (one-time cost). Day-to-day, each session uses 3-5 subagent calls. Framework files consume ≤12k tokens of context. The agent reaches "ready to code" in ~9,680 tokens (4-5 file reads + 1 subagent call). The rest of your ~138-190k window is for code.
+The bootstrap runs 15-20 subagent tasks (one-time cost). Day-to-day, each session uses 3-5 subagent calls. Framework files consume ≤12k tokens of context. The agent reaches "ready to code" in under 11k tokens (4-5 file reads + 1 subagent call). The rest of your ~138-190k window is for code.
 
 **Does the framework work for non-English projects?**
 The prompts are in English and generate English documentation. The framework itself is language-agnostic for code — it works with any programming language and any human language in the PRD, though the framework structure and file names remain in English.
@@ -358,11 +366,11 @@ Five scale systems activate as projects grow: hierarchical domain indexing group
 Contributions welcome. If you find gaps, edge cases, or improvements:
 
 1. Fork the repo
-2. Make your changes to the prompt files
-3. Test by running the prompts on a real project (new and existing)
+2. Make your changes to the prompt files (or add design proposals to `design/`)
+3. Test by running the prompts on a real project (new and existing) — compare against `examples/todo-app/` for structural reference
 4. Submit a PR describing what you changed and why
 
-Key areas that benefit from contributions: support for additional AI coding tools beyond Claude Code, edge cases in crash recovery, progressive disclosure depth tuning, retrieval chain optimizations, and validation scenario coverage.
+Key areas that benefit from contributions: support for additional AI coding tools beyond Claude Code, edge cases in crash recovery, progressive disclosure depth tuning, retrieval chain optimizations, validation coverage, and additional example projects.
 
 ## License
 
