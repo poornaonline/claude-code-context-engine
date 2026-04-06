@@ -1,5 +1,7 @@
 # PRD Generator Prompt
 
+> **framework-version: 1.0.0**
+>
 > **Usage:** Copy everything below the line into Claude Code as a single prompt.
 > This generates a PRD at `docs/prd.md` that is fully compatible with the AI Agent Framework.
 > Works for both new projects (asks you questions) and existing projects (scans your codebase).
@@ -12,6 +14,8 @@
 Generate a Product Requirements Document at docs/prd.md that is fully compatible with the AI Agent Framework (the framework that will later read this PRD from /docs/ai-framework/).
 
 This PRD has TWO audiences: humans who need to understand the product, and AI coding agents who will use it as the source of truth for building the project. The PRD must be structured so the AI framework can extract: features list, tech stack with versions, architecture type, data models, API surface, modules/services, non-functional requirements, database/storage systems, third-party integrations, deployment targets, and environment setup. If any of these are missing, the framework bootstrap will fail or produce incomplete specs.
+
+NOTE: This PRD feeds directly into the Ghajini Memory Architecture bootstrap, which creates retrieval-optimized documentation for AI agents. The bootstrap extracts modules into individual spec files, builds a keyword index (specs/INDEX.md), generates Quick Answer lookups, and constructs a retrieval graph from cross-module relationships. Write every section with this downstream extraction in mind — structured, explicit, and self-contained.
 
 IMPORTANT: You are a collaborative product/engineering manager. DISCUSS with me. Ask questions. Push back on things that don't make sense. Suggest alternatives. Do NOT silently make decisions. If something is vague, ask. If something is technically impractical, say so. If I'm missing something critical, tell me.
 
@@ -228,6 +232,9 @@ List every module/service/major component. Adapt the fields to your project type
 - **Purpose:** What this module does
 - **Key features:** Bullet list of capabilities
 - **Depends on:** Which other modules this one needs
+- **Calls / Called by:** Which modules this one calls, and which modules call into this one (the framework uses this to build the retrieval graph for cross-module navigation)
+- **Domain group:** Which logical domain this module belongs to (e.g., "auth", "data", "ui", "integrations", "infra"). Group related modules — the framework uses this to build hierarchical indexes for projects with 16+ modules.
+- **Capabilities:** What this module PROVIDES to other modules and what it CONSUMES from other modules. Format: "Provides: [user-identity, session-management]. Consumes: [database, email-service]." The framework uses this for capability-based routing and impact analysis.
 - **Data models:** Key entities with fields and relationships — if applicable
 - **Interface:** Adapt to project type:
   - Web/API: API endpoints (method, path, description)
@@ -238,6 +245,8 @@ List every module/service/major component. Adapt the fields to your project type
   - Script: Input sources, output format, configuration options
 - **Third-party integrations** (if applicable): Which external services this module uses
 - **Platform-specific notes** (if applicable): iOS/Android differences, OS-specific behavior, browser compatibility
+- **Quick Answer questions:** 5 questions agents will most commonly ask about this module. Write them as direct questions an agent would ask while implementing (e.g., "How does the auth module validate JWT tokens?", "What event format does the queue module expect?"). These get extracted into the spec's Quick Answers section for fast lookup.
+- **Keywords:** Concepts, terms, and technologies associated with this module (e.g., "JWT, refresh token, OAuth2, session, middleware"). Used to build the keyword index in specs/INDEX.md for cross-cutting searches.
 
 Repeat for every module. For existing projects, include BOTH built modules and planned modules — mark each as "Implemented" or "Planned."
 
@@ -263,6 +272,7 @@ Ordered list of features for the first version. For each:
   - Library: Developer calls `functionName(params)` → receives result → handles errors
   - Script: Input file/data → processing steps → output format
 - **Modules involved:** Which modules from Section 4
+- **Context-dependencies:** Which module specs and docs an agent needs loaded to implement this feature (e.g., "specs/auth.md, specs/database.md, conventions.md"). Maps directly to the `load:` field in task cards so agents load exactly the right context.
 - **Acceptance criteria:** How to know it's done (testable conditions)
 - **Complexity:** S / M / L
 - **Dependencies:** Which other features must be built first (by F-ID)
@@ -329,6 +339,10 @@ For each external service:
 - **Mark unknowns as "TBD — needs decision" rather than guessing.** The AI framework handles TBDs correctly by flagging them.
 - **The PRD should be ≤ 8000 tokens.** If the project is large, keep module descriptions concise and put detailed specs in the AI framework's spec files instead. The PRD is the high-level blueprint, not the full specification.
 - **Cross-reference by IDs.** Features use F-001 format, future features use FF-001. Modules reference each other by name. This enables the AI framework to build dependency graphs.
+- **Each module description should be written so that the first 2 sentences can serve as a standalone summary (≤100 tokens).** The AI framework extracts this for progressive disclosure — agents see summaries first, then load the full spec only when needed.
+- **Cross-module relationships must be explicit: which modules call which, share data with which.** The framework uses this to build a retrieval graph so agents can navigate from any module to its dependencies without scanning the entire codebase.
+- **Group modules into domains.** Related modules should share a domain label (e.g., all auth-related modules are in the "auth" domain). This enables hierarchical indexing at scale. Aim for 5-10 domains, each containing 3-15 modules.
+- **Capabilities must be explicit.** Every module must declare what it provides and what it consumes. This powers capability-based routing — when an agent needs "user identity," it can find which module provides it without guessing.
 
 ## Step 3: Review with user
 
@@ -370,6 +384,13 @@ Also check:
 - Are there any technologies without version numbers?
 - Are there any circular dependencies in the feature list?
 - Is the PRD under 8000 tokens?
+- Does every module have Quick Answer questions (5 per module)?
+- Does every module have keywords listed?
+- Does every feature have context-dependencies listed?
+- Does every module have explicit cross-module relationships documented (Calls / Called by)?
+- Does every module have a domain group assigned?
+- Does every module have capabilities (provides/consumes) listed?
+- Are capabilities consistent — if module A consumes X, does some module provide X?
 
 Report all findings."
 
