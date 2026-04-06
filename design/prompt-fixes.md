@@ -37,8 +37,7 @@ Bootstrap Prompt (~7,800 tokens)
 │   ├── 3. /tasks/ directory                     (~350)
 │   ├── 4. /tasks/detail/                        (~100)
 │   ├── 5. conventions.md                        (~300)
-│   ├── 6. changelog.md                          (~50)
-│   ├── 7. new-feature-template.md               (~500)
+│   ├── 6. new-feature-template.md               (~500)
 │   │   - 4-phase flow (kept, it's structural)
 │   ├── 8. patterns.md                           (~200)
 │   ├── 9. session-handoff.md                    (~400)
@@ -144,7 +143,7 @@ COVERAGE: Compare the module list from the PRD analysis (passed to you) against
 the files in /specs/. Every PRD module must have exactly one spec. Every spec
 must be referenced in BOOTSTRAP.md's decision tree or repo structure.
 
-TASK CONSISTENCY: Read tasks/backlog.md and tasks/dependency-graph.md. Verify:
+TASK CONSISTENCY: Read tasks/backlog.md. Verify:
 (a) every task ID in the dependency graph exists in backlog or completed,
 (b) no task depends on itself or creates a cycle,
 (c) every task references at least one spec file that exists.
@@ -301,7 +300,7 @@ CR-5 INCREMENTAL-COMMITS: Commit after each logical unit of work with
      conventional commit format referencing the task ID.
 CR-6 CHECK-BEFORE-BUILD: Before any work, check completed.md (already done?),
      in-progress.md (in flight?), patterns.md (already exists?), and
-     dependency-graph.md (dependencies met?).
+     backlog dependency chains (dependencies met?).
 CR-7 LATEST-VERSIONS: Use web_search for dependency versions. Never use
      training data. Flag outdated versions in the PRD to the user.
 CR-8 FILE-SIZE-LIMIT: No framework file exceeds 4000 tokens. Split when

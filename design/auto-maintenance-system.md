@@ -101,7 +101,7 @@ grep -rn "^export \(function\|class\|const\|default\)" src/ --include="*.ts"
 grep -rl "import.*{validateEmail}" src/ --include="*.ts" | wc -l
 
 # List known pattern paths from patterns.md
-grep -oP '(?<=\| )[^ |]+\.(ts|js|tsx|jsx)' docs/ai-framework/patterns.md
+grep -o '[^ |]*\.\(ts\|js\|tsx\|jsx\)' docs/ai-framework/patterns.md
 ```
 
 **When to run:** At resync. After completing a feature that created new utilities.
@@ -121,7 +121,7 @@ Verify all cross-references in the framework. Report broken links.
    "shares-data ->". Extract the target module name. Verify a spec file exists for it:
    test -f docs/ai-framework/specs/{target}.md
 
-2. Cross-reference graph: Read cross-reference-graph.md. Extract every module name
+2. Domain INDEX files: Read all specs/[domain]/INDEX.md files. Extract every module name
    mentioned. Verify each has a spec file.
 
 3. Task load fields: Read backlog.md and all files in tasks/detail/.
@@ -151,7 +151,7 @@ Do NOT modify any files.
 grep -h "calls ->\|called-by ->\|shares-data ->" docs/ai-framework/specs/*.md
 
 # Find all markdown links in framework files
-grep -roh '\[.*\]([^)]*\.md)' docs/ai-framework/ | grep -oP '\(([^)]+)\)' | tr -d '()'
+grep -roh '\[.*\]([^)]*\.md)' docs/ai-framework/ | sed 's/.*(\([^)]*\)).*/\1/'
 
 # Find all load: paths in tasks
 grep -h "load:" docs/ai-framework/tasks/backlog.md docs/ai-framework/tasks/detail/*.md 2>/dev/null

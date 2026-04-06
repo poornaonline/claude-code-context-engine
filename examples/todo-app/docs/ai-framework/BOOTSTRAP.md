@@ -7,8 +7,8 @@ STEP 1: READ TATTOOS (CLAUDE.md — auto-loaded)
 STEP 2: CHECK FOR TRAUMA (crash recovery — 5 sec inline check)
         -> git status --short
         -> tail -1 .ai-session-log
-        -> head -20 tasks/in-progress.md
-        -> Verify BOOTSTRAP.md, INDEX.md, conventions.md exist (framework integrity)
+        -> head -20 docs/ai-framework/tasks/in-progress.md
+        -> Verify docs/ai-framework/BOOTSTRAP.md, docs/ai-framework/specs/INDEX.md, docs/ai-framework/conventions.md exist (framework integrity)
         -> If any missing -> spawn integrity repair subagent (rebuild INDEX from specs, flag missing specs as CRITICAL)
         -> All clean -> Step 2.5. Any dirty -> spawn State Checker subagent (Tier 2).
 STEP 2.5: CHECK FOR MERGE CONFLICTS (2 sec)
@@ -33,18 +33,18 @@ STEP 6: ACT
 
 | User Intent | Action |
 |---|---|
-| "Implement next task" | backlog.md -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
+| "Implement next task" | docs/ai-framework/tasks/backlog.md -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
 | "Quick fix" (typo, 1-line change) | NO task card needed. Fix directly. Commit as `fix(scope): description` (no TASK-ID). Update spec only if the fix changes behavior. Log as QUICKFIX in session log. Criteria: touches <=2 files, no behavior change, no spec update needed. If any criterion fails, use normal task flow. |
-| "Fix a bug" | specs/INDEX.md -> find module (api-server/todos/database) -> load spec |
+| "Fix a bug" | docs/ai-framework/specs/INDEX.md -> find module (api-server/todos/database) -> load spec |
 | "Fix a multi-module bug" | Spawn Bug Tracer -> read primary spec -> Spec Readers for secondaries |
-| "Add a feature" | new-feature-template.md -> discuss before building |
+| "Add a feature" | docs/ai-framework/new-feature-template.md -> discuss before building |
 | "Add feature (novel concept)" | Spawn Cross-Module Scout -> discuss -> plan |
 | "Refactor across modules" | Spawn Cross-Module Scout -> Impact Analyzer -> parallel Spec Readers |
 | "Understand system flow" | Spawn Cross-Module Scout -> returns interaction chain + reading order |
-| "Continue previous" | in-progress.md -> read session notes -> resume |
+| "Continue previous" | docs/ai-framework/tasks/in-progress.md -> read session notes -> resume |
 | "Project status" | backlog + in-progress + completed summary |
-| "Spike completed" | in-progress.md -> read spike verdict -> if FEASIBLE: unblock dependent tasks in backlog. If NOT-FEASIBLE: flag to user, discuss alternatives, potentially remove dependent tasks |
-| "Resync framework" | session-handoff.md resync protocol |
+| "Spike completed" | docs/ai-framework/tasks/in-progress.md -> read spike verdict -> if FEASIBLE: unblock dependent tasks in backlog. If NOT-FEASIBLE: flag to user, discuss alternatives, potentially remove dependent tasks |
+| "Resync framework" | docs/ai-framework/session-handoff.md resync protocol |
 
 ## Context Loading Strategy
 
@@ -110,7 +110,20 @@ Return: dependency brief summarizing full chain (<=500 tokens).
 
 ### Subagent Failure Protocol (CR-16)
 
-If any subagent fails after 2 retries, the main agent uses a fallback instead of stalling. Fallbacks are inline approximations (e.g., Context Scout failure -> read primary spec summary directly; State Checker failure -> run Tier 1 checks only). Log `SUBAGENT_FALLBACK: {worker_type}` in session log. See the main framework prompt for the full fallback table.
+If any subagent fails after 2 retries, the main agent uses a fallback instead of stalling. Fallbacks are inline approximations (e.g., Context Scout failure -> read primary spec summary directly; State Checker failure -> run Tier 1 checks only). Log `SUBAGENT_FALLBACK: {worker_type}` in session log.
+
+| Worker | Fallback on failure |
+|--------|---------------------|
+| Context Scout | Read primary spec summary + quick answers directly (~300 tok). Skip secondary specs. |
+| Spec Reader | Main agent reads the spec's Summary section directly. |
+| Impact Analyzer | Main agent reads INDEX.md provides/consumes columns for the module. |
+| State Checker | Main agent runs Tier 1 checks inline. Skip Tier 2. Log RECOVERY_SKIPPED. |
+| Pattern Finder | Main agent greps for the pattern name directly. Accept NONE FOUND risk. |
+| Bug Tracer | Main agent reads INDEX.md keyword hints, picks most likely module, loads that spec. |
+| Dependency Resolver | Main agent reads task's deps field, checks completed.md manually. |
+| Cross-Module Scout | Split by domain, retry per-domain. If still fails: read INDEX.md only. |
+| Chain Walker | Reduce depth by 1, retry. At depth 2: return only direct dependencies. |
+| Spec Verifier | Skip freshness for that spec. Log FRESHNESS_SKIPPED. Proceed with caution. |
 
 ## Research Brief Format (Context Scout Output)
 

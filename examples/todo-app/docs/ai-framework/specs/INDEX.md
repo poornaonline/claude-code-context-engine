@@ -1,3 +1,9 @@
+<!-- AUTO-GENERATED from spec front-matter. Do not edit. Run resync to rebuild. -->
+---
+type: index
+modules: 3
+last-updated: 2026-04-06
+---
 # Module Index
 
 <!-- No domains needed — under 15 modules -->

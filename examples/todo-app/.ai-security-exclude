@@ -4,4 +4,6 @@
 *credentials*
 *secret*
 *.p12
+*.pfx
+id_rsa*
 data/*.db

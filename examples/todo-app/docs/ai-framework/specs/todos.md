@@ -1,8 +1,8 @@
 ---
 module: todos
 purpose: Todo CRUD logic, validation, filtering, and due-date handling
-status: spec-complete
-owners: [backend-team]
+status: not-started
+owners: [src/models/todo.js, src/routes/todos.js, tests/todos.test.js]
 depends-on: [database]
 provides: [createTodo, getTodos, getTodoById, updateTodo, deleteTodo]
 consumes: [db.query, db.run]
@@ -28,8 +28,8 @@ Owns all business logic for todo items — creation, retrieval, update, deletion
 
 ## Cross-Links
 
-- **api-server** — mounts todo routes at `/api/todos`, applies auth middleware
-- **database** — provides `db.query()` and `db.run()` used by all model methods
+- called-by -> **api-server** — mounts todo routes at `/api/todos`, applies auth middleware
+- calls -> **database** — uses `db.query()` and `db.run()` for all data access
 
 ## API Surface
 

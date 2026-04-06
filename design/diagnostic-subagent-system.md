@@ -8,8 +8,8 @@
 ```
 A user reports: "{symptom_description}"
 
-1. Read docs/ai-framework/cross-reference-graph.md — identify modules connected to symptom keywords.
-2. Read docs/ai-framework/specs/INDEX.md — scan Keywords section for matches.
+1. Read docs/ai-framework/specs/INDEX.md — scan Keywords and Provides/Consumes for modules connected to symptom keywords.
+2. Read matching domain INDEX files for deeper cross-references.
 3. Grep codebase for symptom-relevant terms: {extracted_keywords} (max 5 terms).
 4. For each candidate module, check its spec's Known Issues section (first 200 tokens only).
 
@@ -27,7 +27,7 @@ KNOWN_ISSUES_MATCH: {any matching KI entries, or "none"}
 
 **3+ module bugs:** The INTERACTION_CHAIN field traces the data flow across all involved modules. The main agent loads only the PRIMARY_SUSPECT spec directly, then spawns parallel Spec Readers for secondary modules with scoped questions derived from the chain.
 
-**Token cost:** cross-ref-graph (500) + INDEX keywords (300) + grep output (~400) + spec KI sections (200 x 3 = 600) = ~1,800 tokens in subagent context. Well under limits.
+**Token cost:** INDEX keywords (300) + grep output (~400) + spec KI sections (200 x 3 = 600) = ~1,300 tokens in subagent context. Well under limits.
 
 ---
 
@@ -69,7 +69,7 @@ Cross-cutting concern: "{description}"
 
 1. Read docs/ai-framework/specs/INDEX.md (full).
 2. For EVERY module listed, read ONLY its spec's YAML front-matter + Summary section (first ~160 tokens of each spec file).
-3. Read docs/ai-framework/cross-reference-graph.md.
+3. Read docs/ai-framework/specs/INDEX.md (full).
 
 Return (max 500 tokens):
 
@@ -78,13 +78,13 @@ AFFECTED_MODULES:
 - {module}: {how it's affected, one line}
 - ...
 UNAFFECTED: {modules confirmed safe}
-CONNECTIONS: {relevant edges from cross-ref graph}
+CONNECTIONS: {relevant edges from INDEX Provides/Consumes}
 READING_ORDER: {specs to load, ordered by: most-affected first, dependencies before dependents}
 ESTIMATED_TOKENS: {sum of spec token counts from INDEX.md}
 CONFLICTS: {any modules where the concern contradicts existing design}
 ```
 
-**Token math:** INDEX.md (1,500) + 50 modules x 160 tokens (8,000) + cross-ref-graph (500) = **10,000 tokens** in subagent context. Feasible within a subagent's window. For 50+ modules, split into two subagents by domain (frontend/backend).
+**Token math:** INDEX.md (1,500) + 50 modules x 160 tokens (8,000) = **9,500 tokens** in subagent context. Feasible within a subagent's window. For 50+ modules, split into two subagents by domain (frontend/backend).
 
 ---
 
@@ -95,7 +95,7 @@ CONFLICTS: {any modules where the concern contradicts existing design}
 | "Fix a multi-module bug" | Spawn **Bug Tracer** with symptom -> load PRIMARY_SUSPECT spec -> spawn parallel **Spec Readers** for secondary modules with scoped questions from INTERACTION_CHAIN |
 | "Refactor X across modules" | Spawn **Cross-Module Scout** with refactor description -> load affected specs in READING_ORDER -> spawn **Impact Analyzer** before making changes |
 | "Add feature that doesn't exist yet" | Spawn **Cross-Module Scout** to find related modules -> new-feature-template.md Phase 1 -> discuss with user -> **Dependency Resolver** for prerequisite tasks |
-| "Understand how X flows across the system" | Spawn **Cross-Module Scout** with flow description -> read cross-reference-graph.md -> present CONNECTIONS + READING_ORDER to user |
+| "Understand how X flows across the system" | Spawn **Cross-Module Scout** with flow description -> read specs/INDEX.md cross-domain dependencies -> present CONNECTIONS + READING_ORDER to user |
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## The Problem
 
-One-hop retrieval (task card -> spec -> implement) breaks when specs cross-link. TASK-089 loads `payments.md` (3k) -> discovers link to `auth.md` (3k) -> discovers link to `database.md` (3k) = 9k on specs alone. With routing overhead (CLAUDE.md 2.4k + BOOTSTRAP.md 4k + backlog 1.5k + task detail 2k), total = ~19k. Blows the 12k framework budget.
+One-hop retrieval (task card -> spec -> implement) breaks when specs cross-link. TASK-089 loads `payments.md` (3k) -> discovers link to `auth.md` (3k) -> discovers link to `database.md` (3k) = 9k on specs alone. With routing overhead (CLAUDE.md 2.4k + BOOTSTRAP.md 4k + backlog 1.5k + task detail 2k), total = ~19k. Blows the 15k framework budget.
 
 Each hop is sequential and unpredictable. The agent doesn't know the chain depth upfront.
 
@@ -141,7 +141,7 @@ cross-linked spec 1 (full)         3,000
 cross-linked spec 2 (full)         3,000
 cross-linked spec 3 (full)         3,000
                                   ------
-TOTAL                             24,400  ← 2x over 12k budget
+TOTAL                             24,400  ← over 15k budget
 ```
 
 ### WITH multi-hop optimization
@@ -155,7 +155,7 @@ task detail + dependency snapshot  2,200  (includes snapshot from §4)
 primary spec (full)                3,000  (the one being implemented)
 chain-walker brief                   500  (replaces 3 full cross-linked specs)
                                   ------
-TOTAL (main context)              11,200  ← UNDER 12k budget by reservation
+TOTAL (main context)              11,200  ← UNDER 15k budget
 TOTAL (subagent consumed)          ~12k  (INDEX + 3 full specs + processing)
 ```
 
@@ -180,7 +180,7 @@ For tasks that genuinely need full understanding of 4-5 modules (e.g., "refactor
 **Max simultaneous full specs in main context:**
 
 ```
-Total budget:                    12,000
+Total budget:                    15,000
 Fixed overhead (CLAUDE+BOOTSTRAP): 6,400
 Task detail:                      2,000
 Remaining for specs:              3,600

@@ -87,7 +87,7 @@ Before creating framework files, set up project infrastructure the framework dep
 ### Agent Lock File
 - Before starting work, create `.ai-agent.lock` with content: `SESSION_ID|TIMESTAMP|HOSTNAME`.
 - SESSION_ID: generated once per session as `s-$(date +%s | tail -c 7)` and reused for all operations. Stored in the session log's first START entry.
-- Check on session start: if lock exists, parse TIMESTAMP. If older than 2 hours, treat as stale and reclaim. If fresh (under 2 hours), check for active work signs: `git status --short` shows changes AND `.ai-session-log` last entry is not END. If both true, warn user about concurrent agent risk. Otherwise, reclaim the stale lock.
+- Check on session start: if lock exists, parse TIMESTAMP. If older than 2 hours, treat as stale and reclaim. If fresh (under 2 hours), check for active work signs: `git status --short` shows changes AND `.ai-session-log` last entry is not END. If both true, warn user about concurrent agent risk. Otherwise, reclaim the lock.
 - On clean session end: remove the lock.
 - Add `.ai-agent.lock` to `.gitignore`.
 - NEVER use PID (`$$`) for lock ownership — Claude Code shells are ephemeral, PIDs are meaningless across invocations.
@@ -109,7 +109,7 @@ CR-1: DOCS TRACK CODE. Task != done until spec reflects what was built/changed.
 CR-2: STOP AND ASK on any conflict (PRD vs code, spec vs reality, ambiguity).
 CR-3: NEVER ASSUME. Mark unknowns "NEEDS CLARIFICATION." Ask the user.
 CR-4: LOAD ONLY WHAT YOU NEED. Framework <=15k tokens in main context. Subagents for bulk reading. See .context/manifest.md for per-file budgets.
-CR-5: COMMIT AFTER EACH UNIT. Triggers: testable milestone, 5+ files changed, or 10min elapsed.
+CR-5: COMMIT AFTER EACH UNIT. Triggers: testable milestone, 5+ files changed, or 10+ conversation turns since last commit.
 CR-6: CHECK PATTERNS BEFORE WRITING. Reuse existing code. Add new reusable code to patterns.
 CR-7: LATEST LTS ONLY. web_search to verify versions. Never trust training data.
 CR-8: PUSH BACK on bad ideas. Explain why. Suggest alternatives.
@@ -122,7 +122,7 @@ CR-14: SCALE WITH TIERS. Lite (<=5 files): inline in CLAUDE.md. Standard (6-15 m
 CR-15: BRANCH-SAFE FILES. Task status files split per-task to minimize merge surface. INDEX.md auto-generated from spec front-matter (never hand-edited). patterns.md append-only. On merge conflict in any framework file: re-run Auto-Index Rebuilder, never hand-merge INDEX files.
 CR-16: SUBAGENT RESILIENCE. Every subagent call has a fallback strategy. If a subagent fails after 2 retries, the main agent uses the fallback (see Subagent Failure Protocol), never stalls.
 CR-17: SECURITY EXCLUSIONS. All codebase searches (grep, glob) MUST exclude: .env*, *.pem, *.key, *credentials*, *secret*, and all .gitignore paths. Read .ai-security-exclude at session start. If a search result looks like a secret, return "REDACTED — potential secret in {file_path}" instead of the value.
-CR-18: CONTEXT GUARD. If context usage exceeds 60%, stop loading framework files and use subagents exclusively. At 80%, trigger end-of-session: commit current work, update in-progress, hand off. Never let context overflow silently.
+CR-18: CONTEXT GUARD. If estimated context usage exceeds 60% (based on files loaded and conversation length), stop loading framework files and use subagents exclusively. At 80% or 20+ conversation turns, trigger end-of-session: commit current work, update in-progress, hand off. Never let context overflow silently.
 
 ## Priority Hierarchy (when sources conflict)
 1. Direct user instruction (always wins)
@@ -154,8 +154,8 @@ STEP 1: READ TATTOOS (CLAUDE.md — auto-loaded)
 STEP 2: CHECK FOR TRAUMA (crash recovery — 5 sec inline check)
         -> git status --short
         -> tail -1 .ai-session-log
-        -> ls tasks/in-progress/ (or head -20 tasks/in-progress.md if monolithic)
-        -> Verify BOOTSTRAP.md, INDEX.md, conventions.md exist (framework integrity)
+        -> ls docs/ai-framework/tasks/in-progress/ (or head -20 docs/ai-framework/tasks/in-progress.md if monolithic)
+        -> Verify docs/ai-framework/BOOTSTRAP.md, docs/ai-framework/specs/INDEX.md, docs/ai-framework/conventions.md exist (framework integrity)
         -> If any missing -> spawn integrity repair subagent (rebuild INDEX from specs, flag missing specs as CRITICAL)
         -> All clean -> Step 3. Any dirty -> spawn State Checker subagent (Tier 2).
 STEP 2.5: CHECK FOR MERGE CONFLICTS (2 sec)
@@ -179,18 +179,18 @@ STEP 6: ACT
 
 | User Intent | Action |
 |---|---|
-| "Implement next task" | backlog-index.md (if split) or backlog.md -> find active phase -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
+| "Implement next task" | docs/ai-framework/tasks/backlog-index.md (if split) or docs/ai-framework/tasks/backlog.md -> find active phase -> pick top task -> if type=spike: run Spike Protocol (CR-12). If type=impl: read its `load:` field, proceed normally |
 | "Quick fix" (typo, 1-line change) | NO task card needed. Fix directly. Commit as `fix(scope): description` (no TASK-ID). Update spec only if the fix changes behavior. Log as QUICKFIX in session log. Criteria: touches <=2 files, no behavior change, no spec update needed. If any criterion fails, use normal task flow. |
-| "Fix a bug" | specs/INDEX.md -> find module -> load spec |
+| "Fix a bug" | docs/ai-framework/specs/INDEX.md -> find module -> load spec |
 | "Fix a multi-module bug" | Spawn Bug Tracer -> read primary spec -> Spec Readers for secondaries |
-| "Add a feature" | new-feature-template.md -> discuss before building |
+| "Add a feature" | docs/ai-framework/new-feature-template.md -> discuss before building |
 | "Add feature (novel concept)" | Spawn Cross-Module Scout (capability matching) -> discuss -> plan |
 | "Refactor across modules" | Spawn Cross-Module Scout -> Impact Analyzer -> parallel Spec Readers |
 | "Understand system flow" | Spawn Cross-Module Scout -> returns interaction chain + reading order |
-| "Continue previous" | tasks/in-progress/TASK-NNN.md (or in-progress.md if monolithic) -> read session notes -> resume |
+| "Continue previous" | docs/ai-framework/tasks/in-progress/TASK-NNN.md (or docs/ai-framework/tasks/in-progress.md if monolithic) -> read session notes -> resume |
 | "Project status" | backlog + in-progress + completed summary |
-| "Spike completed" | in-progress.md -> read spike verdict -> if FEASIBLE: unblock dependent tasks in backlog. If NOT-FEASIBLE: flag to user, discuss alternatives, potentially remove dependent tasks |
-| "Resync framework" | session-handoff.md resync protocol |
+| "Spike completed" | docs/ai-framework/tasks/in-progress.md -> read spike verdict -> if FEASIBLE: unblock dependent tasks in backlog. If NOT-FEASIBLE: flag to user, discuss alternatives, potentially remove dependent tasks |
+| "Resync framework" | docs/ai-framework/session-handoff.md resync protocol |
 
 **Context Loading Strategy:**
 Budget: framework files consume <=15k tokens in main context. Breakdown: ~7k fixed routing overhead (CLAUDE.md 2.5k + BOOTSTRAP.md 4k + manifest 0.5k) + up to 8k task-specific docs (specs + task detail + patterns). The "ready to code" path takes under 11k: routing overhead + task card + INDEX lookup + scout brief. Read progressively: front-matter (60 tok) -> summary (100 tok) -> quick answers (200 tok) -> full detail only when implementing. If a task needs >2 full specs, spawn a Context Scout subagent instead of loading directly.
@@ -653,7 +653,7 @@ File naming: kebab-case for docs, match project convention for code
 ```
 
 **Subagent 3A: BOOTSTRAP.md + session-handoff.md + .context/manifest.md**
-"Create BOOTSTRAP.md with: wakeup ritual (7 steps including Step 4.5 VERIFY FRESHNESS), mission decision tree (10 rows including multi-module bug, refactor, novel feature, system flow), context loading strategy with multi-hop rules, 10 subagent retrieval worker types (original 5 + Bug Tracer, Dependency Resolver, Cross-Module Scout, Chain Walker, Spec Verifier) with prompt templates, research brief format. Create session-handoff.md with: end-of-session checklist, Tier 1/Tier 2 crash recovery, staleness detection in resync, auto-maintenance triggers. Create .context/manifest.md."
+"Create BOOTSTRAP.md with: wakeup ritual (8 steps including Step 4.5 VERIFY FRESHNESS), mission decision tree (12 rows including quick fix, multi-module bug, refactor, novel feature, system flow, spike completed, resync), context loading strategy with multi-hop rules, 10 subagent retrieval worker types (original 5 + Bug Tracer, Dependency Resolver, Cross-Module Scout, Chain Walker, Spec Verifier) with prompt templates, research brief format. Create session-handoff.md with: end-of-session checklist, Tier 1/Tier 2 crash recovery, staleness detection in resync, auto-maintenance triggers. Create .context/manifest.md."
 
 **Subagent 3B: specs/INDEX.md + all module specs**
 "If >15 modules: create specs/INDEX.md as DOMAIN lookup table (domain | count | purpose + KEYWORD_HINTS). Create specs/[domain]/INDEX.md for each domain (module | keywords | provides | consumes + cross-domain dependencies). Create one spec per module using progressive disclosure with capability annotations (provides/consumes in front-matter). For <=15 modules: flat INDEX.md with capabilities. For existing projects: scan actual code."

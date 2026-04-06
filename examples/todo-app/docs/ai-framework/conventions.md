@@ -25,13 +25,13 @@
 ## Commit Format
 
 ```
-type(scope): short description
+type(scope): short description [TASK-ID]
 
 types: feat, fix, refactor, test, docs, chore
 scope: module name (api-server, todos, database)
 ```
 
-Examples: `feat(database): add migration runner`, `fix(todos): validate title length`
+Examples: `feat(database): add migration runner [TASK-001]`, `fix(todos): validate title length [TASK-003]`
 
 ## Error Handling
 
@@ -41,3 +41,11 @@ Examples: `feat(database): add migration runner`, `fix(todos): validate title le
   { "error": { "message": "...", "statusCode": 400 } }
   ```
 - Never leak stack traces in production
+
+## Infrastructure
+
+- **Package manager**: npm
+- **Database**: SQLite via better-sqlite3 (file: `./data/todos.db`, gitignored)
+- **Auth**: JWT via jsonwebtoken + bcrypt
+- **Test runner**: Vitest
+- **Git hooks**: Advisory pre-commit hook warns on code commits without spec updates

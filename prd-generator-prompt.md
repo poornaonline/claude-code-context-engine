@@ -10,7 +10,7 @@
 
 ## The Prompt
 
-```
+~~~
 Generate a Product Requirements Document at docs/prd.md that is fully compatible with the AI Agent Framework (the framework that will later read this PRD from /docs/ai-framework/).
 
 This PRD has TWO audiences: humans who need to understand the product, and AI coding agents who will use it as the source of truth for building the project. The PRD must be structured so the AI framework can extract: features list, tech stack with versions, architecture type, data models, API surface, modules/services, non-functional requirements, database/storage systems, third-party integrations, deployment targets, and environment setup. If any of these are missing, the framework bootstrap will fail or produce incomplete specs.
@@ -108,7 +108,7 @@ Ask:
 3. "Any third-party services you already know you'll need?"
 4. "Solo developer or team?"
 
-If the user doesn't have strong opinions, make opinionated recommendations based on the product type and explain your reasoning. Use web_search to verify current best practices and latest LTS versions.
+If the user doesn't have strong opinions, make opinionated recommendations based on the product type and explain your reasoning. Use web_search to verify latest LTS/stable versions of recommended technologies.
 
 **Batch 3: Features & Scope**
 Ask:
@@ -375,7 +375,7 @@ After user approval, spawn a validation subagent with this task:
 4. Repo structure — for CLAUDE.md and BOOTSTRAP.md
 5. List of modules with dependencies between them — for /specs/ directory
 6. Data models with fields and relationships — for /specs/ and database setup
-7. Features with IDs, acceptance criteria, complexity, and dependencies — for /tasks/backlog.md and dependency-graph.md
+7. Features with IDs, acceptance criteria, complexity, and dependencies — for /tasks/backlog.md
 8. Environment variables and setup steps — for CLAUDE.md
 9. Third-party integrations mapped to modules — for /specs/
 10. Non-functional requirements — for conventions.md
@@ -384,10 +384,9 @@ For each item: if present and complete, mark ✓. If present but incomplete, not
 
 Also check:
 - Are there any features without acceptance criteria?
-- Are there any modules without data models?
+- Are there any modules without data models that clearly need them (e.g., modules with database dependencies)?
 - Are there any technologies without version numbers?
 - Are there any circular dependencies in the feature list?
-- Is the PRD under 8000 tokens?
 - Does every module have Quick Answer questions (5 per module)?
 - Does every module have keywords listed?
 - Does every feature have context-dependencies listed?
@@ -408,4 +407,4 @@ Fix any gaps the validation finds. Then commit with message `docs: create produc
 ## Step 5: Output
 
 The final output is docs/prd.md — fully written, user-approved, and validated for AI framework compatibility. Do NOT create any other files or write any application code. The AI Framework Bootstrap Prompt will handle everything else.
-```
+~~~

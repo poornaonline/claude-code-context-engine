@@ -1,3 +1,8 @@
+---
+type: patterns
+count: 0
+last-updated: 2026-04-06
+---
 # Patterns Index
 
 <!-- New project — no patterns documented yet. Add entries as implementation progresses. -->

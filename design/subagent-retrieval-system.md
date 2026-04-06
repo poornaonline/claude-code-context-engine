@@ -60,7 +60,7 @@ Do NOT summarize the spec. ONLY answer the question.
 
 **Purpose:** Before changing a module's API, data model, or shared code, identifies everything that would break.
 
-**Reads:** All spec files (scanning cross-references), patterns.md, dependency-graph.md.
+**Reads:** All spec files (scanning cross-references), patterns.md.
 
 **Returns (max 300 tokens):** A structured impact report.
 
@@ -91,7 +91,7 @@ If nothing is affected, say "ISOLATED CHANGE — no cross-module impact detected
 
 **Purpose:** Checks the current state of the project — git status, task progress, framework health. Used at session start and before major decisions.
 
-**Reads:** git status, git log, tasks/in-progress.md, tasks/completed.md, changelog.md.
+**Reads:** git status, git log, tasks/in-progress.md, tasks/completed.md.
 
 **Returns (max 200 tokens):** A state summary.
 
@@ -103,7 +103,7 @@ Check the project state and return a status report (max 200 tokens):
 
 1. Run: git status, git diff --stat, git log --oneline -5
 2. Read: docs/ai-framework/tasks/in-progress.md
-3. Read: docs/ai-framework/changelog.md (last 5 entries)
+3. Read: docs/ai-framework/tasks/completed.md (last 20 entries)
 
 Return in this format:
 

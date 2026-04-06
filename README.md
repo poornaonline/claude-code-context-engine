@@ -4,7 +4,7 @@
 
 AI coding agents lose their memory every session. Like the protagonist in *Memento* — a man with short-term memory loss who uses tattoos, photos, and a document wall to function — this framework gives your agent a system of permanent markers, quick-scan cards, and deep reference files so it never starts from zero.
 
-Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (under 14k tokens), with ~135-185k tokens free for actual work.
+Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (under 11k tokens), with ~135-185k tokens free for actual work.
 
 > **New to this?** See [`examples/todo-app/`](examples/todo-app/) for a complete working example of what the framework produces.
 
@@ -43,7 +43,7 @@ Without this framework:
 
 With this framework:
 - Every session starts informed — the agent reads only what it needs and knows everything relevant
-- The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (under 14k tokens)
+- The agent reaches "ready to code" in 4-5 file reads + 1 subagent call (under 11k tokens)
 - Architecture, conventions, and patterns are documented and always up to date
 - Crash recovery detects interrupted work and picks up where it left off — with a write-ahead log that survives crashes
 - New features go through a structured discuss → plan → approve → implement flow, with certainty ratings (Proven/Explored/Uncharted) that trigger spike tasks for unproven concepts before implementation begins
@@ -68,7 +68,7 @@ Quick-scan cards, ~50-100 tokens each. The agent flips through these to find wha
 
 ### Layer 3: The Wall (Full specs, task details, patterns)
 
-The complete knowledge base. The agent only enters a Wall document when a Polaroid points it there. Spec files, task detail files, the pattern registry, the cross-reference graph — all live here. Each one uses progressive disclosure so the agent can read just the top 60 tokens or go deep.
+The complete knowledge base. The agent only enters a Wall document when a Polaroid points it there. Spec files, task detail files, the pattern registry — all live here. Each one uses progressive disclosure so the agent can read just the top 60 tokens or go deep.
 
 ### The Retrieval Chain
 
@@ -247,7 +247,7 @@ The framework uses ten specialized subagents (Claude Code's Task tool) to keep t
 |----------|-----|---------------|
 | **Context Scout** | Pre-reads specs from a task card's `load:` list, returns a compressed research brief (~400 tok) | Before starting any task |
 | **Spec Reader** | Answers a single question from a spec file without loading the whole thing into main context | When the agent needs one fact |
-| **Impact Analyzer** | Finds what breaks when a module changes — walks the cross-reference graph | Before any change to shared code |
+| **Impact Analyzer** | Finds what breaks when a module changes — walks cross-links via INDEX files | Before any change to shared code |
 | **State Checker** | Crash recovery audit — checks git status, stale locks, incomplete tasks, session log | On session start (Tier 2 recovery) |
 | **Pattern Finder** | Searches `patterns.md` for existing utilities before the agent writes a new one | Before creating any utility function |
 | **Bug Tracer** | Diagnose multi-module bugs from symptom description | When debugging crosses module boundaries |
@@ -304,7 +304,7 @@ The main agent writes code. Everything else is delegated.
 - **Subagents for everything except coding.** Reading specs, running tests, updating docs, checking for patterns — all delegated. Main agent context stays clean.
 - **Prove before build (CR-12).** Uncharted features get a time-boxed spike task that produces a feasibility verdict before any dependent implementation begins. This prevents building on assumptions that may be false.
 - **Core before chrome (CR-13).** Tasks are ordered by implementation layer: infrastructure/data → core logic → integration → UI/presentation. Build the foundation before the interface.
-- **Scale with tiers (CR-14).** Projects scale through four tiers — Lite (≤8 modules), Standard (9-15), Full (16-30), Mega (31+) — each activating progressively more infrastructure (domain indexes, auto-maintenance, hierarchical specs).
+- **Scale with tiers (CR-14).** Projects scale through four tiers — Lite (≤5 files), Standard (6-15 modules), Full (16-49 modules), Mega (50+) — each activating progressively more infrastructure (domain indexes, auto-maintenance, hierarchical specs).
 - **Branch-safe files (CR-15).** Task status uses per-task files in `tasks/in-progress/` instead of a shared `in-progress.md`, with an auto-generated `backlog-index.md` for navigation. Eliminates merge conflicts across branches.
 - **Subagent resilience (CR-16).** If a subagent call fails, the main agent falls back to a defined protocol (inline read, skip, or retry) instead of halting. Every subagent has a failure fallback.
 - **Security exclusions (CR-17).** `.ai-security-exclude` defines patterns (secrets, credentials, keys) excluded from all framework searches and subagent scans. Prevents sensitive data from leaking into documentation.
@@ -363,7 +363,7 @@ Re-run `prd-generator-prompt.md` on the existing project. It scans current code,
 The framework now includes an agent lock file (`.ai-agent.lock`) that prevents concurrent agents from corrupting shared docs. If an agent is running, a second agent sees the lock and warns you. Stale locks from crashes are auto-cleaned. For best results: one agent at a time.
 
 **How much does this cost in tokens?**
-The bootstrap runs 15-20 subagent tasks (one-time cost). Day-to-day, each session uses 3-5 subagent calls. Framework files consume ≤15k tokens of context. The agent reaches "ready to code" in under 14k tokens (4-5 file reads + 1 subagent call). The rest of your ~135-185k window is for code.
+The bootstrap runs 15-20 subagent tasks (one-time cost). Day-to-day, each session uses 3-5 subagent calls. Framework files consume ≤15k tokens of context. The agent reaches "ready to code" in under 11k tokens (4-5 file reads + 1 subagent call). The rest of your ~135-185k window is for code.
 
 **Does the framework work for non-English projects?**
 The prompts are in English and generate English documentation. The framework itself is language-agnostic for code — it works with any programming language and any human language in the PRD, though the framework structure and file names remain in English.

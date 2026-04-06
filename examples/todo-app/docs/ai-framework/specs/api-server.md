@@ -1,8 +1,8 @@
 ---
 module: api-server
 purpose: Express app setup, routing, middleware, and error handling
-status: spec-complete
-owners: [backend-team]
+status: not-started
+owners: [src/server.js, src/routes/auth.js, src/middleware/]
 depends-on: [todos, database]
 provides: [app, authMiddleware, errorHandler]
 consumes: [todoRoutes, authRoutes, db.connection]
@@ -28,8 +28,8 @@ The Express application entry point. Configures middleware (JSON parsing, CORS, 
 
 ## Cross-Links
 
-- **todos** — route handlers mounted at `/api/todos`
-- **database** — connection initialized on app startup
+- calls -> **todos** — mounts todo routes at `/api/todos`
+- calls -> **database** — initializes connection on app startup
 
 ## API Surface
 

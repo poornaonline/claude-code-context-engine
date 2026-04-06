@@ -83,8 +83,8 @@ DB: users, sessions, refresh_tokens
 |----------|---------|-------------|
 | P0 - Never evict | CLAUDE.md, BOOTSTRAP.md, context-manifest | Never. 7k fixed cost. |
 | P1 - Keep until task done | Active task's spec, task detail, patterns.md | After task completion. |
-| P2 - Evict after use | Specs read for cross-reference, dependency-graph.md | Immediately after extracting needed facts. |
-| P3 - Never load into main | completed.md (beyond existence check), changelog.md (beyond last 5 entries), PRD, other task detail files, archive files | Always subagent. |
+| P2 - Evict after use | Specs read for cross-reference, backlog dependency chains | Immediately after extracting needed facts. |
+| P3 - Never load into main | completed.md (beyond existence check), PRD, other task detail files, archive files | Always subagent. |
 
 **Eviction triggers:**
 - Context usage > 60%: Stop loading new docs. Subagent only from here.
@@ -111,9 +111,7 @@ File: `docs/ai-framework/context-manifest.md` (~200 tokens)
 | new-feature-template.md | 1800 | new-feature, change-request |
 | tasks/backlog.md | 1500 | task-selection |
 | tasks/in-progress.md | 800 | session-start, continue-work |
-| tasks/dependency-graph.md | 600 | task-selection |
 | tasks/completed.md | 1200 | duplicate-check (subagent) |
-| changelog.md | 400 | session-start (last 5 only) |
 | specs/auth.md | 2800 | auth-tasks |
 | specs/database.md | 2400 | db-tasks, migration |
 | specs/api-routes.md | 2600 | api-tasks |

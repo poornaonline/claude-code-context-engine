@@ -12,7 +12,7 @@ last-updated: 2026-04-06
 TASK-001 | M | impl | Set up database layer
   deps: none
   load: [specs/database.md]
-  load-chain: [specs/database.md -> docs/prd.md (data models)]
+  load-chain: [specs/database.md]
   touch: [src/db/connection.js, src/db/migrate.js, src/db/migrations/]
   patterns: []
 

@@ -51,7 +51,7 @@ pnpm test              # run tests
 1. Read BOOTSTRAP.md before any work. It contains the full workflow, decision tree, and subagent strategy.
 2. Every code change updates the docs. A task is NOT done until framework docs reflect what was built.
 3. On fresh context: run crash recovery protocol from session-handoff.md via subagent.
-4. Before writing code: check in-progress.md, completed.md, dependency-graph.md, and patterns.md.
+4. Before writing code: check in-progress.md, completed.md, and patterns.md.
 5. Implement in small increments. Commit after each logical unit with conventional commit format.
 6. For ANY change not in the backlog: follow new-feature-template.md — discuss with user first.
 7. When unclear — ASK. When something doesn't make sense — PUSH BACK.
@@ -71,19 +71,19 @@ pnpm test              # run tests
 
 **Three tiers with clear triggers:**
 
-| | Lite | Standard | Full |
-|---|---|---|---|
-| **Trigger** | ≤5 source files OR ≤500 LOC OR single-purpose script/tool | 6-15 modules OR 500-10k LOC OR standard app | 16+ modules OR 10k+ LOC OR monorepo/microservices |
-| **CLAUDE.md** | Yes (~1,200 tok) | Yes (~2,400 tok) | Yes (~2,400 tok) |
-| **BOOTSTRAP.md** | No — inline in CLAUDE.md | Yes (~3,500 tok) | Yes (~4,000 tok) |
-| **specs/** | No — one `ARCHITECTURE.md` | Yes, one per module | Yes, with hierarchy (see §3) |
-| **tasks/** | `tasks.md` (single file) | Full directory | Full directory + phase splitting |
-| **conventions.md** | No — 3 lines in CLAUDE.md | Yes (~2,000 tok) | Yes, split by layer |
-| **patterns.md** | No | Yes | Yes, split by layer |
-| **session-handoff.md** | No | Yes | Yes |
-| **new-feature-template.md** | No | Yes | Yes |
-| **changelog.md** | No | Yes | Yes |
-| **Total framework tokens** | ~2,000 | ~10,000 | ~12,000 (loaded) |
+| | Lite | Standard | Full | Mega |
+|---|---|---|---|---|
+| **Trigger** | ≤5 source files OR ≤500 LOC OR single-purpose script/tool | 6-15 modules OR 500-10k LOC OR standard app | 16-49 modules OR 10k+ LOC OR monorepo/microservices | 50+ modules OR monorepo with 5+ services |
+| **CLAUDE.md** | Yes (~1,200 tok) | Yes (~2,400 tok) | Yes (~2,400 tok) | Yes (~2,400 tok) |
+| **BOOTSTRAP.md** | No — inline in CLAUDE.md | Yes (~3,500 tok) | Yes (~4,000 tok) | Yes (~4,000 tok) |
+| **specs/** | No — one `ARCHITECTURE.md` | Yes, one per module | Yes, with hierarchy (see §3) | Yes, with hierarchy + domain grouping |
+| **tasks/** | `tasks.md` (single file) | Full directory | Full directory + phase splitting | Full directory + phase splitting |
+| **conventions.md** | No — 3 lines in CLAUDE.md | Yes (~2,000 tok) | Yes, split by layer | Yes, split by layer |
+| **patterns.md** | No | Yes | Yes, split by layer | Yes, split by layer |
+| **session-handoff.md** | No | Yes | Yes | Yes |
+| **new-feature-template.md** | No | Yes | Yes | Yes |
+| **changelog.md** | No | No | No | No (removed — changes tracked via commit messages and session log) |
+| **Total framework tokens** | ~2,000 | ~10,000 | ~12,000 (loaded) | ~15,000 (loaded) |
 
 **Tier detection logic (for bootstrap prompt):**
 
@@ -96,8 +96,10 @@ IF source_files ≤ 5 AND loc ≤ 500:
   tier = "lite"
 ELIF modules ≤ 15 AND loc ≤ 10000:
   tier = "standard"
-ELSE:
+ELIF modules ≤ 49:
   tier = "full"
+ELSE:
+  tier = "mega"
 
 Present tier to user: "This project qualifies as [tier]. I'll create [X files].
 Override? (e.g., force standard for a small project you plan to grow)"

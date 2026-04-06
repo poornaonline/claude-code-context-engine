@@ -12,7 +12,8 @@ cd "$REPO_ROOT"
 # Stale lock file (killed process left .git/index.lock)
 LOCK="$REPO_ROOT/.git/index.lock"
 if [ -f "$LOCK" ]; then
-  LOCK_AGE=$(( $(date +%s) - $(stat -f%m "$LOCK" 2>/dev/null || stat -c%Y "$LOCK") ))
+  LOCK_MOD=$(stat -f%m "$LOCK" 2>/dev/null || stat -c%Y "$LOCK" 2>/dev/null || echo 0)
+  LOCK_AGE=$(( $(date +%s) - LOCK_MOD ))
   if [ "$LOCK_AGE" -gt 60 ]; then
     rm -f "$LOCK"
     echo "RECOVERED: removed stale index.lock (age: ${LOCK_AGE}s)"
@@ -143,6 +144,7 @@ if [ -f "$LOCKFILE" ]; then
   fi
 fi
 echo "$$" > "$LOCKFILE"
+# NOTE: The bootstrap prompt replaced PID-based locking with SESSION_ID|TIMESTAMP|HOSTNAME for cross-invocation reliability.
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)|$$|$(whoami)" >> "$LOCKFILE"
 
 # Release lock (run at session end, or trap EXIT)

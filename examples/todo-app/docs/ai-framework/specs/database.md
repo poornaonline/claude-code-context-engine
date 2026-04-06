@@ -1,8 +1,8 @@
 ---
 module: database
 purpose: SQLite connection management, migrations, and query helpers
-status: spec-complete
-owners: [backend-team]
+status: not-started
+owners: [src/db/]
 depends-on: []
 provides: [db.connection, db.query, db.run, migrate]
 consumes: []
@@ -28,8 +28,8 @@ Manages the SQLite database via better-sqlite3. Provides a singleton connection,
 
 ## Cross-Links
 
-- **todos** — uses `db.query()` and `db.run()` for all data access
-- **api-server** — initializes connection on startup
+- called-by -> **todos** — uses `db.query()` and `db.run()` for all data access
+- called-by -> **api-server** — initializes connection on startup
 
 ## API Surface
 
