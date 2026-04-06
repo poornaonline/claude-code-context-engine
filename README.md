@@ -1,8 +1,8 @@
 # Claude Code Context Engine
 
-**v1.0.0** | Retrieval-optimized documentation framework for AI coding agents — built on the Ghajini Memory Architecture.
+**v1.0.0** | Retrieval-optimized documentation framework for AI coding agents — built on the Memento Memory Architecture.
 
-AI coding agents lose their memory every session. Like the protagonist in *Ghajini* — a man with short-term memory loss who uses tattoos, photos, and a document wall to function — this framework gives your agent a system of permanent markers, quick-scan cards, and deep reference files so it never starts from zero.
+AI coding agents lose their memory every session. Like the protagonist in *Memento* — a man with short-term memory loss who uses tattoos, photos, and a document wall to function — this framework gives your agent a system of permanent markers, quick-scan cards, and deep reference files so it never starts from zero.
 
 Drop it into any project. The framework creates a layered knowledge base that any AI agent can read on a fresh session, navigate to the right information in seconds, load only what it needs, implement correctly, and update the docs after. The agent reaches "ready to code" in 4-5 file reads and 1 subagent call (under 11k tokens), with ~138-190k tokens free for actual work.
 
@@ -50,7 +50,7 @@ With this framework:
 - Context retrieval is optimized: agents never load full specs unless a task card points them there
 - The framework evolves with the codebase — it's never a stale snapshot
 
-## How It Works — The Ghajini Memory Architecture
+## How It Works — The Memento Memory Architecture
 
 The framework is built on three memory layers, mirroring the survival system from the film:
 
@@ -303,7 +303,7 @@ The main agent writes code. Everything else is delegated.
 
 ## Architecture Decisions
 
-**Why the Ghajini metaphor?** It's not just a metaphor — it's the actual architecture. AI agents have the same condition as the film's protagonist: complete memory loss between sessions. The three-layer system (tattoos, photos, wall) maps directly to how information should be structured for amnesiac retrieval: permanent navigation aids → quick-scan summaries → full detail on demand.
+**Why the Memento metaphor?** It's not just a metaphor — it's the actual architecture. AI agents have the same condition as the film's protagonist: complete memory loss between sessions. The three-layer system (tattoos, photos, wall) maps directly to how information should be structured for amnesiac retrieval: permanent navigation aids → quick-scan summaries → full detail on demand.
 
 **Why markdown files?** AI agents read text. Markdown is universal, version-controllable via git, and has near-zero overhead. No database, no SaaS dependency, no build step.
 

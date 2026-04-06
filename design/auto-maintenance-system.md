@@ -1,4 +1,4 @@
-# Auto-Maintenance System for Ghajini Memory Architecture
+# Auto-Maintenance System for Memento Memory Architecture
 
 ## Overview
 

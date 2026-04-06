@@ -12,7 +12,7 @@
 ```
 Read the PRD at docs/prd.md and bootstrap a retrieval-optimized context framework for AI coding agents at /docs/ai-framework/.
 
-This framework follows the "Ghajini Memory Architecture" — like a person with short-term memory loss, the AI agent wakes up every session with zero memory. The framework is its external memory system, organized in layers:
+This framework follows the "Memento Memory Architecture" — like a person with short-term memory loss, the AI agent wakes up every session with zero memory. The framework is its external memory system, organized in layers:
 - **Tattoos** (CLAUDE.md) — always visible, navigation pointers only
 - **Polaroid Photos** (index files) — quick-scan cards, <=100 tokens each, point to deeper docs
 - **The Wall** (full specs, task details) — complete knowledge, accessed only when a Polaroid points to it
